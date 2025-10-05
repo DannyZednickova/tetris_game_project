@@ -1,5 +1,16 @@
+# This is a sample Python script.
 import random
 import pygame
+from Auth import is_authenticated
+import time, json, os, hmac, hashlib, requests, secrets, glob
+
+# --- ADD: imports ---
+import time, json, os, hmac, hashlib, requests, secrets, glob
+
+
+# Press ⌃R to execute it or replace it with your code.
+# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+
 
 """
 10 x 20 grid
@@ -142,7 +153,6 @@ T = [['.....',
 shapes = [S, Z, I, O, J, L, T]
 shape_colors = [(0, 255, 0), (255, 0, 0), (0, 255, 255), (255, 255, 0), (255, 165, 0), (0, 0, 255), (128, 0, 128)]
 
-
 # class to represent each of the pieces
 
 
@@ -227,12 +237,15 @@ def get_shape():
 
 # draws text in the middle
 def draw_text_middle(text, size, color, surface):
-    font = pygame.font.Font(fontpath, size, bold=False, italic=True)
+    font = pygame.font.Font(fontpath, size)
+    font.set_bold(False)
+    font.set_italic(True)
     label = font.render(text, 1, color)
 
-    surface.blit(label, (top_left_x + play_width/2 - (label.get_width()/2), top_left_y + play_height/2 - (label.get_height()/2)))
-
-
+    surface.blit(label, (
+        top_left_x + play_width/2 - (label.get_width()/2),
+        top_left_y + play_height/2 - (label.get_height()/2)
+    ))
 # draws the lines of the grid for the game
 def draw_grid(surface):
     r = g = b = 0
@@ -306,45 +319,40 @@ def draw_window(surface, grid, score=0, last_score=0):
     surface.fill((0, 0, 0))  # fill the surface with black
 
     pygame.font.init()  # initialise font
-    font = pygame.font.Font(fontpath_mario, 65, bold=True)
-    label = font.render('TETRIS', 1, (255, 255, 255))  # initialise 'Tetris' text with white
 
-    surface.blit(label, ((top_left_x + play_width / 2) - (label.get_width() / 2), 30))  # put surface on the center of the window
+    # TITULEK
+    font = pygame.font.Font(fontpath_mario, 65)
+    font.set_bold(True)  # <-- takhle se to dělá
+    label = font.render('TETRIS', 1, (255, 255, 255))
+    surface.blit(label, ((top_left_x + play_width / 2) - (label.get_width() / 2), 30))
 
-    # current score
+    # SCORE
     font = pygame.font.Font(fontpath, 30)
-    label = font.render('SCORE   ' + str(score) , 1, (255, 255, 255))
-
+    label = font.render('SCORE   ' + str(score), 1, (255, 255, 255))
     start_x = top_left_x + play_width + 50
     start_y = top_left_y + (play_height / 2 - 100)
-
     surface.blit(label, (start_x, start_y + 200))
 
-    # last score
+    # HIGHSCORE
     label_hi = font.render('HIGHSCORE   ' + str(last_score), 1, (255, 255, 255))
-
     start_x_hi = top_left_x - 240
     start_y_hi = top_left_y + 200
-
     surface.blit(label_hi, (start_x_hi + 20, start_y_hi + 200))
 
-    # draw content of the grid
+    # GRID
     for i in range(row):
         for j in range(col):
-            # pygame.draw.rect()
-            # draw a rectangle shape
-            # rect(Surface, color, Rect, width=0) -> Rect
             pygame.draw.rect(surface, grid[i][j],
-                             (top_left_x + j * block_size, top_left_y + i * block_size, block_size, block_size), 0)
+                             (top_left_x + j * block_size,
+                              top_left_y + i * block_size,
+                              block_size, block_size), 0)
 
-    # draw vertical and horizontal grid lines
     draw_grid(surface)
 
-    # draw rectangular border around play area
+    # BORDER
     border_color = (255, 255, 255)
-    pygame.draw.rect(surface, border_color, (top_left_x, top_left_y, play_width, play_height), 4)
-
-    # pygame.display.update()
+    pygame.draw.rect(surface, border_color,
+                     (top_left_x, top_left_y, play_width, play_height), 4)
 
 
 # update the score txt file with high score
@@ -484,10 +492,68 @@ def main_menu(window):
                 main(window)
 
     pygame.quit()
+def get_ui_font(size):
+    import pygame
+    # zkus jasný glyph-complete font
+    try:
+        # DejaVu Sans je součástí většiny systémů (a i pygame balí)
+        return pygame.font.SysFont("DejaVu Sans", size)
+    except:
+        return pygame.font.SysFont(None, size)
 
 
-if __name__ == '__main__':
-    win = pygame.display.set_mode((s_width, s_height))
-    pygame.display.set_caption('Tetris')
+def login_gate_screen(window, port):
+    """Shows the login waiting screen. Returns True if logged in, False on cancel (Esc/Close)."""
+    clock = pygame.time.Clock()
+    dots, tick = "", 0
 
-    main_menu(win)  # start game
+    # UI font – NE z arcade.ttf
+    font = get_ui_font(30)
+    small = get_ui_font(24)
+
+    # Exit button rect
+    btn_w, btn_h = 170, 46
+    btn_x = top_left_x + play_width/2 - btn_w/2
+    btn_y = top_left_y + play_height - 80
+    btn_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+
+    line1 = "Please log in via your browser to start the game."
+    line2 = f"If no window opened: http://127.0.0.1:{port}/login"
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                return False
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if btn_rect.collidepoint(event.pos):
+                    return False
+
+        window.fill((0, 0, 0))
+
+        # texts
+        t1 = font.render(line1, True, (255, 255, 255))
+        t2 = small.render(line2, True, (200, 200, 200))
+
+        tick += clock.tick(30)
+        if tick > 300:
+            dots = "." * ((len(dots) % 3) + 1)
+            tick = 0
+        t3 = font.render("Waiting for login" + dots, True, (255, 255, 0))
+
+        # draw
+        window.blit(t1, (top_left_x - 160, top_left_y + 150))
+        window.blit(t2, (top_left_x - 210, top_left_y + 200))
+        window.blit(t3, (top_left_x - 50, top_left_y + 260))
+
+        # Exit button
+        pygame.draw.rect(window, (180, 50, 50), btn_rect, border_radius=8)
+        bl = font.render("Exit (Esc)", True, (255, 255, 255))
+        window.blit(bl, (btn_x + (btn_w - bl.get_width())/2,
+                         btn_y + (btn_h - bl.get_height())/2))
+
+        pygame.display.update()
+
+        if is_authenticated():
+            return True
