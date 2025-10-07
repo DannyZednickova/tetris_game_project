@@ -41,9 +41,9 @@ block_size = 30  # size of block
 top_left_x = (s_width - play_width) // 2
 top_left_y = s_height - play_height - 50
 
-filepath = './highscore.txt'
-fontpath = './arcade.ttf'
-fontpath_mario = './mario.ttf'
+filepath = os.path.join(os.path.dirname(__file__), './highscore.txt')
+fontpath = os.path.join(os.path.dirname(__file__), 'arcade.TTF')
+fontpath_mario = os.path.join(os.path.dirname(__file__), './mario.ttf')
 
 # shapes formats
 
