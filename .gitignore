@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtuální prostředí
+.venv/
+.venv1/
+
+# IDE nastavení
+.idea/
+
+
+# Dočasné soubory
+*.log
+*.tmp
+
+
+# OS soubory
+.DS_Store
+Thumbs.db
