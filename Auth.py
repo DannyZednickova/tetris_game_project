@@ -1,8 +1,14 @@
 # auth_server.py
+
+
 import os, sqlite3, secrets, hashlib, hmac, threading, webbrowser
 from flask import Flask, request, redirect, make_response
-from Auth_Templates import FORM_LOGIN, FORM_SETUP, OK_PAGE, ERR_PAGE, PROFILE_PAGE
+from string import Template
+from Auth_Templates import STYLE, FORM_LOGIN, FORM_SETUP, OK_PAGE, ERR_PAGE, PROFILE_PAGE, PLAY_PAGE, USER_EXISTS_PAGE
 
+def render(tpl, **kwargs):
+    # doplní $style a další $placeholdery bezpečně (CSS závorky nevadí)
+    return Template(tpl).substitute(**kwargs)
 
 DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "tetris_users"))
 AUTH_EVENT = threading.Event()
@@ -41,8 +47,7 @@ def verify_password(password: str, salt: bytes, pwd_hash: bytes) -> bool:
 
 @app.get("/setup")
 def setup_get():
-    # Vždy ukaž formulář pro vytvoření nového účtu
-    return FORM_SETUP
+    return render(FORM_SETUP, style=STYLE)
 
 @app.post("/setup")
 def setup_post():
@@ -51,7 +56,7 @@ def setup_post():
     p = request.form.get("p", "")
     if not u or not p:
         conn.close()
-        return FORM_SETUP
+        return render(FORM_SETUP, style=STYLE)
 
     pwd_hash, salt = hash_password(p)
     try:
@@ -62,7 +67,8 @@ def setup_post():
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
-        return "<p>Uživatel už existuje. <a href='/login'>Přihlásit</a></p>"
+        # nový stylizovaný návrat
+        return render(USER_EXISTS_PAGE, style=STYLE)
 
     conn.close()
     return redirect("/login")
@@ -74,7 +80,7 @@ def login_get():
     conn.close()
     if cnt == 0:
         return redirect("/setup")
-    return FORM_LOGIN
+    return render(FORM_LOGIN, style=STYLE)
 
 @app.post("/login")
 def login_post():
@@ -82,40 +88,60 @@ def login_post():
     u = request.form.get("u", "").strip()
     p = request.form.get("p", "")
     conn = _db()
-    row = conn.execute("SELECT id, username, pwd_hash, salt, highscore, date_of_birth FROM users WHERE username=?", (u,)).fetchone()
+
+    # Upravíme SQL, aby vracelo i highscore a datum narození, pokud existují
+    # Pokud tabulka nemá tyto sloupce, přidej je ALTEREM nebo nech score/dob = None
+    try:
+        row = conn.execute("""
+            SELECT id, username, pwd_hash, salt,
+                   COALESCE(highscore, 0),
+                   COALESCE(date_of_birth, 'neuvedeno')
+            FROM users
+            WHERE username=?
+        """, (u,)).fetchone()
+    except sqlite3.OperationalError:
+        # starší DB bez těchto sloupců
+        row = conn.execute("SELECT id, username, pwd_hash, salt FROM users WHERE username=?", (u,)).fetchone()
+        row = (*row, 0, "neuvedeno")
+
     conn.close()
 
     if not row:
-        return ERR_PAGE
+        return render(ERR_PAGE, style=STYLE)
 
     user_id, username, pwd_hash, salt, score, dob = row
 
     if verify_password(p, salt, pwd_hash):
         AUTH_TOKEN = secrets.token_urlsafe(24)
-        # ⚠️ TADY SE AUTH_EVENT NESPÚŠTÍ! – zatím jen uloží token a zobrazí profil
-        resp = make_response(PROFILE_PAGE.format(
+        AUTH_EVENT.clear()
+
+        html = render(
+            PROFILE_PAGE,
+            style=STYLE,
             username=username,
-            dob=dob or "neuvedeno",
+            dob=dob,
             score=score or 0
-        ))
+        )
+
+        resp = make_response(html)
         resp.set_cookie("session", AUTH_TOKEN, httponly=True, samesite="Lax")
         return resp
 
-    return ERR_PAGE
+    return render(ERR_PAGE, style=STYLE)
+
 
 # --- NOVÁ ROUTA, KTERÁ UZAVŘE PROFIL A VRÁTÍ SE DO HRY ---
 @app.post("/play")
 def play_post():
     """Uživatel klikl na 'Chci hrát' → aktivuje AUTH_EVENT"""
     global AUTH_TOKEN
-    AUTH_EVENT.set()  # ✅ přesunuto sem
-    resp = make_response("""<!doctype html><meta charset="utf-8">
-    <h2>Přihlášení dokončeno ✅</h2>
-    <p>Můžeš se vrátit do hry.</p>""")
+    AUTH_EVENT.set()
+
+    html = render(PLAY_PAGE, style=STYLE)
+
+    resp = make_response(html)
     resp.set_cookie("session", AUTH_TOKEN, httponly=True, samesite="Lax")
     return resp
-
-
 
 @app.get("/shutdown")
 def shutdown():
