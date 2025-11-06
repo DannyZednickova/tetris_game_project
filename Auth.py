@@ -1,8 +1,10 @@
 # auth_server.py
 import os, sqlite3, secrets, hashlib, hmac, threading, webbrowser
 from flask import Flask, request, redirect, make_response
+from Auth_Templates import FORM_LOGIN, FORM_SETUP, OK_PAGE, ERR_PAGE, PROFILE_PAGE
 
-DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "tetris.sqlite3"))
+
+DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "tetris_users"))
 AUTH_EVENT = threading.Event()
 AUTH_TOKEN = None
 
@@ -34,32 +36,6 @@ def verify_password(password: str, salt: bytes, pwd_hash: bytes) -> bool:
     test, _ = hash_password(password, salt)
     return hmac.compare_digest(test, pwd_hash)
 
-# --- HTML FORMS ---
-FORM_SETUP = """<!doctype html><meta charset="utf-8"><title>Vytvořit prvního uživatele</title>
-<h2>První nastavení účtu</h2>
-<form method="post">
-<label>Uživatelské jméno:<br><input name="u" required></label><br><br>
-<label>Heslo:<br><input name="p" type="password" required></label><br><br>
-<button type="submit">Vytvořit účet</button>
-</form>
-<p>Po vytvoření budete přesměrováni na přihlášení.</p>"""
-
-FORM_LOGIN = """<!doctype html><meta charset="utf-8"><title>Přihlášení</title>
-<h2>Přihlášení</h2>
-<form method="post">
-<label>Uživatelské jméno:<br><input name="u" required></label><br><br>
-<label>Heslo:<br><input name="p" type="password" required></label><br><br>
-<button type="submit">Login</button>
-</form>
-<p>Nemáš účet? <a href="/setup">Vytvoř první účet</a></p>"""
-
-OK_PAGE = """<!doctype html><meta charset="utf-8"><title>OK</title>
-<h2>Přihlášení proběhlo úspěšně.</h2>
-<p>Okno můžeš zavřít a vrátit se do hry.</p>"""
-
-ERR_PAGE = """<!doctype html><meta charset="utf-8"><title>Chyba</title>
-<h2>Neplatné přihlašovací údaje.</h2>
-<p><a href="/login">Zkusit znovu</a></p>"""
 
 # --- ROUTES ---
 
@@ -106,20 +82,55 @@ def login_post():
     u = request.form.get("u", "").strip()
     p = request.form.get("p", "")
     conn = _db()
-    row = conn.execute("SELECT pwd_hash, salt FROM users WHERE username=?", (u,)).fetchone()
+    row = conn.execute("SELECT id, username, pwd_hash, salt, highscore, date_of_birth FROM users WHERE username=?", (u,)).fetchone()
     conn.close()
 
     if not row:
         return ERR_PAGE
 
-    pwd_hash, salt = row
+    user_id, username, pwd_hash, salt, score, dob = row
+
     if verify_password(p, salt, pwd_hash):
         AUTH_TOKEN = secrets.token_urlsafe(24)
-        AUTH_EVENT.set()
-        resp = make_response(OK_PAGE)
+        # ⚠️ TADY SE AUTH_EVENT NESPÚŠTÍ! – zatím jen uloží token a zobrazí profil
+        resp = make_response(PROFILE_PAGE.format(
+            username=username,
+            dob=dob or "neuvedeno",
+            score=score or 0
+        ))
         resp.set_cookie("session", AUTH_TOKEN, httponly=True, samesite="Lax")
         return resp
+
     return ERR_PAGE
+
+# --- NOVÁ ROUTA, KTERÁ UZAVŘE PROFIL A VRÁTÍ SE DO HRY ---
+@app.post("/play")
+def play_post():
+    """Uživatel klikl na 'Chci hrát' → aktivuje AUTH_EVENT"""
+    global AUTH_TOKEN
+    AUTH_EVENT.set()  # ✅ přesunuto sem
+    resp = make_response("""<!doctype html><meta charset="utf-8">
+    <h2>Přihlášení dokončeno ✅</h2>
+    <p>Můžeš se vrátit do hry.</p>""")
+    resp.set_cookie("session", AUTH_TOKEN, httponly=True, samesite="Lax")
+    return resp
+
+
+
+@app.get("/shutdown")
+def shutdown():
+    func = request.environ.get("werkzeug.server.shutdown")
+    if func is None:
+        return "Nelze vypnout server – neběží pod Werkzeugem."
+    func()
+    return "Auth server vypnut."
+
+
+
+
+
+
+
 
 # --- CONTROL HELPERS ---
 
@@ -141,3 +152,7 @@ def wait_for_login():
 def is_authenticated():
     """Vrací True pokud již došlo k přihlášení."""
     return AUTH_EVENT.is_set()
+
+
+
+#

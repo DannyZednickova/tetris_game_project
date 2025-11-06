@@ -235,7 +235,7 @@ def get_shape():
     return Piece(5, 0, random.choice(shapes))
 
 
-# draws text in the middle
+# draws text in the middle - POUZITO PRO PRESS ANY KEY
 def draw_text_middle(text, size, color, surface):
     font = pygame.font.Font(fontpath, size)
     font.set_bold(False)
@@ -244,9 +244,12 @@ def draw_text_middle(text, size, color, surface):
 
     surface.blit(label, (
         top_left_x + play_width/2 - (label.get_width()/2),
-        top_left_y + play_height/2 - (label.get_height()/2)
+        top_left_y + play_height/2 - (label.get_height()/2 -90)
     ))
 # draws the lines of the grid for the game
+
+
+
 def draw_grid(surface):
     r = g = b = 0
     grid_color = (r, g, b)
@@ -375,123 +378,124 @@ def get_max_score():
     return score
 
 
+def shutdown_auth_server():
+    """Ukončí běžící Flask server běžící na portu 8765."""
+    try:
+        import psutil
+        current = psutil.Process(os.getpid())
+        for child in current.children(recursive=True):
+            if "flask" in child.name().lower() or "python" in child.name().lower():
+                child.terminate()
+        time.sleep(0.3)
+    except Exception:
+        pass
+    finally:
+        os._exit(0)
+
+
+
 def main(window):
     locked_positions = {}
-    create_grid(locked_positions)
-
-    change_piece = False
-    run = True
-    current_piece = get_shape()
-    next_piece = get_shape()
+    current_piece, next_piece = get_shape(), get_shape()
     clock = pygame.time.Clock()
-    fall_time = 0
-    fall_speed = 0.35
-    level_time = 0
-    score = 0
-    last_score = get_max_score()
+    fall_time, fall_speed, level_time = 0, 0.35, 0
+    score, last_score = 0, get_max_score()
+    run = True
 
     while run:
-        # need to constantly make new grid as locked positions always change
         grid = create_grid(locked_positions)
-
-        # helps run the same on every computer
-        # add time since last tick() to fall_time
-        fall_time += clock.get_rawtime()  # returns in milliseconds
+        fall_time += clock.get_rawtime()
         level_time += clock.get_rawtime()
+        clock.tick()
 
-        clock.tick()  # updates clock
-
-        if level_time/1000 > 5:    # make the difficulty harder every 10 seconds
+        if level_time/1000 > 5:
             level_time = 0
-            if fall_speed > 0.15:   # until fall speed is 0.15
+            if fall_speed > 0.15:
                 fall_speed -= 0.005
 
-        if fall_time / 1000 > fall_speed:
+        if fall_time/1000 > fall_speed:
             fall_time = 0
             current_piece.y += 1
             if not valid_space(current_piece, grid) and current_piece.y > 0:
                 current_piece.y -= 1
-                # since only checking for down - either reached bottom or hit another piece
-                # need to lock the piece position
-                # need to generate new piece
                 change_piece = True
+            else:
+                change_piece = False
+        else:
+            change_piece = False
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                shutdown_auth_server()
                 run = False
-                pygame.display.quit()
-                quit()
-
-            elif event.type == pygame.KEYDOWN:
+                pygame.quit()
+                return
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    shutdown_auth_server()
+                    run = False
+                    pygame.quit()
+                    return
                 if event.key == pygame.K_LEFT:
-                    current_piece.x -= 1  # move x position left
+                    current_piece.x -= 1
                     if not valid_space(current_piece, grid):
                         current_piece.x += 1
-
                 elif event.key == pygame.K_RIGHT:
-                    current_piece.x += 1  # move x position right
+                    current_piece.x += 1
                     if not valid_space(current_piece, grid):
                         current_piece.x -= 1
-
                 elif event.key == pygame.K_DOWN:
-                    # move shape down
                     current_piece.y += 1
                     if not valid_space(current_piece, grid):
                         current_piece.y -= 1
-
                 elif event.key == pygame.K_UP:
-                    # rotate shape
-                    current_piece.rotation = current_piece.rotation + 1 % len(current_piece.shape)
+                    current_piece.rotation = (current_piece.rotation + 1) % len(current_piece.shape)
                     if not valid_space(current_piece, grid):
-                        current_piece.rotation = current_piece.rotation - 1 % len(current_piece.shape)
+                        current_piece.rotation = (current_piece.rotation - 1) % len(current_piece.shape)
 
-        piece_pos = convert_shape_format(current_piece)
-
-        # draw the piece on the grid by giving color in the piece locations
-        for i in range(len(piece_pos)):
-            x, y = piece_pos[i]
+        for x, y in convert_shape_format(current_piece):
             if y >= 0:
                 grid[y][x] = current_piece.color
 
-        if change_piece:  # if the piece is locked
-            for pos in piece_pos:
-                p = (pos[0], pos[1])
-                locked_positions[p] = current_piece.color       # add the key and value in the dictionary
+        if change_piece:
+            for pos in convert_shape_format(current_piece):
+                locked_positions[pos] = current_piece.color
             current_piece = next_piece
             next_piece = get_shape()
-            change_piece = False
-            score += clear_rows(grid, locked_positions) * 10    # increment score by 10 for every row cleared
+            score += clear_rows(grid, locked_positions) * 10
             update_score(score)
-
-            if last_score < score:
-                last_score = score
+            last_score = max(last_score, score)
 
         draw_window(window, grid, score, last_score)
         draw_next_shape(next_piece, window)
         pygame.display.update()
 
         if check_lost(locked_positions):
+            draw_text_middle('You Lost', 40, (255,255,255), window)
+            pygame.display.update()
+            time.sleep(2)
+            shutdown_auth_server()
             run = False
 
-    draw_text_middle('You Lost', 40, (255, 255, 255), window)
-    pygame.display.update()
-    pygame.time.delay(2000)  # wait for 2 seconds
     pygame.quit()
 
 
 def main_menu(window):
     run = True
     while run:
-        draw_text_middle('Press any key to begin', 50, (255, 255, 255), window)
+        draw_text_middle('Press any key to begin', 50, (255,255,255), window)
         pygame.display.update()
-
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                shutdown_auth_server()
                 run = False
             elif event.type == pygame.KEYDOWN:
                 main(window)
-
     pygame.quit()
+
+
+
+
 def get_ui_font(size):
     import pygame
     # zkus jasný glyph-complete font
