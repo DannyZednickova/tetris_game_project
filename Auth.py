@@ -1,7 +1,7 @@
 # auth_server.py
 
 
-import os, sqlite3, secrets, hashlib, hmac, threading, webbrowser
+import os, sqlite3, secrets, hashlib, hmac, threading, webbrowser, re
 from flask import Flask, request, redirect, make_response
 from string import Template
 from Auth_Templates import STYLE, FORM_LOGIN, FORM_SETUP, OK_PAGE, ERR_PAGE, PROFILE_PAGE, PLAY_PAGE, USER_EXISTS_PAGE
@@ -43,6 +43,31 @@ def verify_password(password: str, salt: bytes, pwd_hash: bytes) -> bool:
     return hmac.compare_digest(test, pwd_hash)
 
 
+def valid_username(u):
+    return 4 <= len(u) <= 32 and re.match(r'^[A-Za-z0-9](?:[A-Za-z0-9._-]{1,31})$', u)
+
+
+def valid_password(p):
+    """Kontroluje, že heslo má délku 4–15 znaků a obsahuje:
+    - malé písmeno
+    - velké písmeno
+    - číslo
+    - speciální znak
+    """
+    if not 4 <= len(p) <= 15:
+        return False
+    if not re.search(r"[a-z]", p):  # alespoň jedno malé písmeno
+        return False
+    if not re.search(r"[A-Z]", p):  # alespoň jedno velké písmeno
+        return False
+    if not re.search(r"[0-9]", p):  # alespoň jedno číslo
+        return False
+    if not re.search(r"[^A-Za-z0-9]", p):  # alespoň jeden speciální znak
+        return False
+    return True
+
+
+
 # --- ROUTES ---
 
 @app.get("/setup")
@@ -57,6 +82,17 @@ def setup_post():
     if not u or not p:
         conn.close()
         return render(FORM_SETUP, style=STYLE)
+
+    #validace usernama
+    if not valid_username(u):
+        conn.close()
+        return render(FORM_SETUP, style=STYLE)
+
+    if not valid_password(p):
+        conn.close()
+        return render(
+            FORM_SETUP,
+            style=STYLE)
 
     pwd_hash, salt = hash_password(p)
     try:
