@@ -4,7 +4,7 @@
 import os, sqlite3, secrets, hashlib, hmac, threading, webbrowser, re
 from flask import Flask, request, redirect, make_response
 from string import Template
-from Auth_Templates import STYLE, FORM_LOGIN, FORM_SETUP, OK_PAGE, ERR_PAGE, PROFILE_PAGE, PLAY_PAGE, USER_EXISTS_PAGE
+from Auth_Templates_OLD_Flusk import STYLE, FORM_LOGIN, FORM_SETUP, OK_PAGE, ERR_PAGE, PROFILE_PAGE, PLAY_PAGE, USER_EXISTS_PAGE
 
 def render(tpl, **kwargs):
     # doplní $style a další $placeholdery bezpečně (CSS závorky nevadí)

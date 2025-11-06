@@ -1,7 +1,7 @@
 # This is a sample Python script.
 import random
 import pygame
-from Auth import is_authenticated
+#from Auth import is_authenticated
 import time, json, os, hmac, hashlib, requests, secrets, glob
 
 # --- ADD: imports ---
@@ -378,21 +378,6 @@ def get_max_score():
     return score
 
 
-def shutdown_auth_server():
-    """Ukončí běžící Flask server běžící na portu 8765."""
-    try:
-        import psutil
-        current = psutil.Process(os.getpid())
-        for child in current.children(recursive=True):
-            if "flask" in child.name().lower() or "python" in child.name().lower():
-                child.terminate()
-        time.sleep(0.3)
-    except Exception:
-        pass
-    finally:
-        os._exit(0)
-
-
 
 def main(window):
     locked_positions = {}
@@ -506,58 +491,3 @@ def get_ui_font(size):
         return pygame.font.SysFont(None, size)
 
 
-def login_gate_screen(window, port):
-    """Shows the login waiting screen. Returns True if logged in, False on cancel (Esc/Close)."""
-    clock = pygame.time.Clock()
-    dots, tick = "", 0
-
-    # UI font – NE z arcade.ttf
-    font = get_ui_font(30)
-    small = get_ui_font(24)
-
-    # Exit button rect
-    btn_w, btn_h = 170, 46
-    btn_x = top_left_x + play_width/2 - btn_w/2
-    btn_y = top_left_y + play_height - 80
-    btn_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
-
-    line1 = "Please log in via your browser to start the game."
-    line2 = f"If no window opened: http://127.0.0.1:{port}/login"
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return False
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                return False
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if btn_rect.collidepoint(event.pos):
-                    return False
-
-        window.fill((0, 0, 0))
-
-        # texts
-        t1 = font.render(line1, True, (255, 255, 255))
-        t2 = small.render(line2, True, (200, 200, 200))
-
-        tick += clock.tick(30)
-        if tick > 300:
-            dots = "." * ((len(dots) % 3) + 1)
-            tick = 0
-        t3 = font.render("Waiting for login" + dots, True, (255, 255, 0))
-
-        # draw
-        window.blit(t1, (top_left_x - 160, top_left_y + 150))
-        window.blit(t2, (top_left_x - 210, top_left_y + 200))
-        window.blit(t3, (top_left_x - 50, top_left_y + 260))
-
-        # Exit button
-        pygame.draw.rect(window, (180, 50, 50), btn_rect, border_radius=8)
-        bl = font.render("Exit (Esc)", True, (255, 255, 255))
-        window.blit(bl, (btn_x + (btn_w - bl.get_width())/2,
-                         btn_y + (btn_h - bl.get_height())/2))
-
-        pygame.display.update()
-
-        if is_authenticated():
-            return True
