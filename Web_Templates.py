@@ -1,4 +1,4 @@
-# auth_templates.py — stylované HTML se šablonami pro Template()
+#  stylované HTML se šablonami pro Webserver....
 
 STYLE = """
 <style>

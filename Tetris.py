@@ -1,11 +1,9 @@
-# This is a sample Python script.
 import random
 import pygame
-from Auth import is_authenticated
-import time, json, os, hmac, hashlib, requests, secrets, glob
+from Web_Server import is_authenticated
+import time, json, os, hmac, hashlib, secrets, glob
 
-# --- ADD: imports ---
-import time, json, os, hmac, hashlib, requests, secrets, glob
+
 
 
 # Press ⌃R to execute it or replace it with your code.
@@ -167,6 +165,11 @@ class Piece(object):
 
 # initialise the grid
 def create_grid(locked_pos={}):
+    """Vytvori a vrati 2D seznam (grid) se zakladnimi barvami.
+    Parametry:
+        locked_pos (dict) - mapovani pozic (x,y) na barvu (r,g,b), ktere budou predem zablokovane.
+    Navratova hodnota:
+        grid (list of lists) - row x col seznam RGB trojic."""
     grid = [[(0, 0, 0) for x in range(col)] for y in range(row)]  # grid represented rgb tuples
 
     # locked_positions dictionary
@@ -182,6 +185,11 @@ def create_grid(locked_pos={}):
 
 
 def convert_shape_format(piece):
+    """Prevede polozku Piece na seznam konkretni polohy bloku v sitce.
+    Parametry:
+        piece (Piece) - instance s x,y,shape a rotation.
+    Navrat:
+        positions (list of tuples) - seznam (x,y) souradnic bloku podle aktualni rotace."""
     positions = []
     shape_format = piece.shape[piece.rotation % len(piece.shape)]  # get the desired rotated shape from piece
 
@@ -207,6 +215,12 @@ def convert_shape_format(piece):
 
 # checks if current position of piece in grid is valid
 def valid_space(piece, grid):
+    """Zkontroluje zda dane pozice pro piece jsou volne v ramci gridu.
+    Parametry:
+        piece (Piece) - kontrolovana polozka
+        grid (list) - aktualni grid
+    Navrat:
+        bool - True pokud jsou vsechny obsazene polozky ve volnem prostoru, jinak False."""
     # makes a 2D list of all the possible (x,y)
     accepted_pos = [[(x, y) for x in range(col) if grid[y][x] == (0, 0, 0)] for y in range(row)]
     # removes sub lists and puts (x,y) in one list; easier to search
@@ -223,6 +237,11 @@ def valid_space(piece, grid):
 
 # check if piece is out of board
 def check_lost(positions):
+    """Zkontroluje zda nejaka pozice ma y < 1, coz znamena prohra.
+    Parametry:
+        positions (iterable) - seznam pozic (x,y)
+    Navrat:
+        bool - True pokud dojde k prohre, jinak False."""
     for pos in positions:
         x, y = pos
         if y < 1:
@@ -232,11 +251,20 @@ def check_lost(positions):
 
 # chooses a shape randomly from shapes list
 def get_shape():
+    """Vytvori novy objekt Piece umisteny na startovni pozici.
+    Navrat:
+        Piece instance."""
     return Piece(5, 0, random.choice(shapes))
 
 
 # draws text in the middle - POUZITO PRO PRESS ANY KEY
 def draw_text_middle(text, size, color, surface):
+    """Vykresli text doprostred herni oblasti.
+    Parametry:
+        text (str) - retezec k vykresleni
+        size (int) - velikost fontu
+        color (tuple) - RGB barva
+        surface (pygame.Surface) - cilovy povrch"""
     font = pygame.font.Font(fontpath, size)
     font.set_bold(False)
     font.set_italic(True)
@@ -251,6 +279,9 @@ def draw_text_middle(text, size, color, surface):
 
 
 def draw_grid(surface):
+    """Vykresli matici ciary gridu.
+    Parametry:
+        surface (pygame.Surface) - cilovy povrch."""
     r = g = b = 0
     grid_color = (r, g, b)
 
@@ -266,6 +297,12 @@ def draw_grid(surface):
 
 # clear a row when it is filled
 def clear_rows(grid, locked):
+    """Odebere plne radky z gridu a posune vsechny vysse leziaci bloky dolu.
+    Parametry:
+        grid (list) - aktualni grid
+        locked (dict) - mapovani pozic (x,y) na barvu
+    Navrat:
+        increment (int) - pocet smazanych radku"""
     # need to check if row is clear then shift every other row above down one
     increment = 0
     for i in range(len(grid) - 1, -1, -1):      # start checking the grid backwards
@@ -298,6 +335,10 @@ def clear_rows(grid, locked):
 
 # draws the upcoming piece
 def draw_next_shape(piece, surface):
+    """Vykresli nasledujici tetromino v panelu.
+    Parametry:
+        piece (Piece) - nasledujici polozka
+        surface (pygame.Surface) - cilovy povrch"""
     font = pygame.font.Font(fontpath, 30)
     label = font.render('Next shape', 1, (255, 255, 255))
 
@@ -319,13 +360,19 @@ def draw_next_shape(piece, surface):
 
 # draws the content of the window
 def draw_window(surface, grid, score=0, last_score=0):
+    """Vykresli cele herni okno včetně score a highscore.
+    Parametry:
+        surface (pygame.Surface) - cilovy povrch
+        grid (list) - aktualni grid
+        score (int) - aktualni score
+        last_score (int) - highscore"""
     surface.fill((0, 0, 0))  # fill the surface with black
 
     pygame.font.init()  # initialise font
 
     # TITULEK
     font = pygame.font.Font(fontpath_mario, 65)
-    font.set_bold(True)  # <-- takhle se to dělá
+    font.set_bold(True)  # <-- takhle se to dela
     label = font.render('TETRIS', 1, (255, 255, 255))
     surface.blit(label, ((top_left_x + play_width / 2) - (label.get_width() / 2), 30))
 
@@ -358,8 +405,35 @@ def draw_window(surface, grid, score=0, last_score=0):
                      (top_left_x, top_left_y, play_width, play_height), 4)
 
 
-# update the score txt file with high score
+
+
+
+
+
+
+
+#tady to updatuje Score....
+
+# Tady je zatim hloupy ukladac vysokeho skoree do txt - potreba udelat tak, at se uklada aktualni ID
+#uzivatele + datum + nejvyssi skore + ja nwm co dalsiho
+#po kazde hre se udela zapis do DB??? nebo budem updatovat dle ID a pricitat skore??
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def update_score(new_score):
+    """Aktualizuje soubor s highscore. Parametry:
+    new_score (int) - novy score pro porovnani a zapis."""
     score = get_max_score()
 
     with open(filepath, 'w') as file:
@@ -369,8 +443,11 @@ def update_score(new_score):
             file.write(str(score))
 
 
-# get the high score from the file
+# V GUI je to videt jako high score....
 def get_max_score():
+    """Cte highscore ze souboru filepath.
+    Navrat:
+        int - hodnota highscore. (Predpoklada, ze soubor existuje a ma cislo)."""
     with open(filepath, 'r') as file:
         lines = file.readlines()        # reads all the lines and puts in a list
         score = int(lines[0].strip())   # remove \n
@@ -378,8 +455,17 @@ def get_max_score():
     return score
 
 
+
+
+
+
+
+
+
+
 def shutdown_auth_server():
-    """Ukončí běžící Flask server běžící na portu 8765."""
+    """Ukonci vsechny podprocesy flask/python a ukonci proces.
+    Neni parametrizovana. Vola psutil pokud je dostupny, jinak vynuti exit."""
     try:
         import psutil
         current = psutil.Process(os.getpid())
@@ -395,6 +481,10 @@ def shutdown_auth_server():
 
 
 def main(window):
+    """Hlavni herni smycka, spousti hru.
+    Parametry:
+        window (pygame.Surface) - otevrene okno pro vykreslovani.
+    Funkce bezi dokud hrac neukonci hru nebo neprohra."""
     locked_positions = {}
     current_piece, next_piece = get_shape(), get_shape()
     clock = pygame.time.Clock()
@@ -480,7 +570,14 @@ def main(window):
     pygame.quit()
 
 
+
+
+
+
 def main_menu(window):
+    """Zobrazi hlavni menu a ceka na stisk klavesy pro start hry.
+    Parametry:
+        window (pygame.Surface) - cilove okno."""
     run = True
     while run:
         draw_text_middle('Press any key to begin', 50, (255,255,255), window)
@@ -497,17 +594,33 @@ def main_menu(window):
 
 
 def get_ui_font(size):
+    """Vrati pygame font pro UI texty.
+    Parametry:
+        size (int) - pozadovana velikost pismene.
+    Navrat:
+        pygame.font.Font."""
     import pygame
-    # zkus jasný glyph-complete font
     try:
-        # DejaVu Sans je součástí většiny systémů (a i pygame balí)
+
         return pygame.font.SysFont("DejaVu Sans", size)
     except:
         return pygame.font.SysFont(None, size)
 
 
+
+
+
+
+
+
+
 def login_gate_screen(window, port):
-    """Shows the login waiting screen. Returns True if logged in, False on cancel (Esc/Close)."""
+    """Zobrazi cekaeci obrazovku pred prihlasenim.
+    Parametry:
+        window (pygame.Surface) - cilove okno
+        port (int) - port, kde bezi auth server, aby uzivatel vedel URL
+    Navrat:
+        bool - True pokud je uzivatel prihlasen (is_authenticated vrati True), False pri Esc nebo Exit."""
     clock = pygame.time.Clock()
     dots, tick = "", 0
 
