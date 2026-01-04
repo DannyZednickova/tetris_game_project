@@ -17,6 +17,7 @@ def render(tpl, **kwargs):
 DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "tetris_users"))
 AUTH_EVENT = threading.Event()
 AUTH_TOKEN = None
+CURRENT_USER = None
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
@@ -35,6 +36,56 @@ def _db():
     """)
     conn.commit()
     return conn
+
+
+def _ensure_user_columns(conn: sqlite3.Connection) -> None:
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN highscore INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+
+
+def get_current_user():
+    return CURRENT_USER
+
+
+def get_user_highscore(user_id: int) -> int:
+    if not user_id:
+        return 0
+    conn = _db()
+    try:
+        _ensure_user_columns(conn)
+        row = conn.execute(
+            "SELECT COALESCE(highscore, 0) FROM users WHERE id=?",
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return 0
+        return int(row[0] or 0)
+    finally:
+        conn.close()
+
+
+def update_user_highscore(user_id: int, score: int) -> None:
+    if not user_id:
+        return
+    conn = _db()
+    try:
+        _ensure_user_columns(conn)
+        row = conn.execute(
+            "SELECT COALESCE(highscore, 0) FROM users WHERE id=?",
+            (user_id,),
+        ).fetchone()
+        current = int(row[0] or 0) if row else 0
+        if score > current:
+            conn.execute(
+                "UPDATE users SET highscore=? WHERE id=?",
+                (int(score), user_id),
+            )
+            conn.commit()
+    finally:
+        conn.close()
 
 # --- PASSWORDS ---
 def hash_password(password: str, salt: bytes = None):
@@ -133,7 +184,7 @@ def login_post():
     Ocekava form data: 'u' (username), 'p' (password).
     Pokud je prihlaseni uspesne, vygeneruje AUTH_TOKEN, nastavi cookie 'session' a vrati profilni stranku.
     Pokud ne, vrati chybovou stranku."""
-    global AUTH_TOKEN
+    global AUTH_TOKEN, CURRENT_USER
     u = request.form.get("u", "").strip()
     p = request.form.get("p", "")
     conn = _db()
@@ -141,6 +192,7 @@ def login_post():
     # Upravime SQL, aby vracelo i highscore a datum narozeni, pokud existuji
     # Pokud tabulka nema tyto sloupce, pridej je ALTEREM nebo nech score/dob = None
     try:
+        _ensure_user_columns(conn)
         row = conn.execute("""
             SELECT id, username, pwd_hash, salt,
                    COALESCE(highscore, 0),
@@ -162,6 +214,7 @@ def login_post():
 
     if verify_password(p, salt, pwd_hash):
         AUTH_TOKEN = secrets.token_urlsafe(24)
+        CURRENT_USER = {"id": user_id, "username": username}
         AUTH_EVENT.clear()
 
         html = render(
@@ -176,6 +229,7 @@ def login_post():
         resp.set_cookie("session", AUTH_TOKEN, httponly=True, samesite="Lax")
         return resp
 
+    CURRENT_USER = None
     return render(ERR_PAGE, style=STYLE)
 
 

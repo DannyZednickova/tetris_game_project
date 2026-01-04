@@ -1,0 +1,7 @@
+{
+  "Tetris.py": "e87fc18c582bff48924867ac71f1ab60cd429c6406cebbd9efc89f7e54fc8738",
+  "main.py": "9b2a7e6f1c063550218b14354014c70499ef744d3f9be8dd7b86d1bfd12c2b42",
+  "telemetry_api_key": "",
+  "telemetry_endpoint": "http://localhost:8000/telemetry",
+  "version": "0.0.0"
+}

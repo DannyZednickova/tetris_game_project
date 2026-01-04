@@ -1,1 +1,8 @@
-Sebastian Reed, Jakub Doležal, Daniela Zedníčková - projekt Tetris - UTB 2025
+﻿Sebastian Reed, Jakub Dole‘–al, Daniela ZednÆðŽ›kovÆó - projekt Tetris - UTB 2025
+
+Telemetrie (opt-in, anonymni):
+- uklada anonymni technicka data lokalne do telemetry.db (oddeleno od user DB)
+- odesila batch pres HTTP POST na endpoint z manifest.json
+- nic se neodesila bez souhlasu uzivatele
+
+Zapnuti/vypnuti: v login gate obrazovce (volba "Chci posilat anonymni technicka data pro zlepseni hry.")

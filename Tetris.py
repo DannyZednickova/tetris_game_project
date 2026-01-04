@@ -1,13 +1,14 @@
-import random
+﻿import random
 import pygame
-from Web_Server import is_authenticated
+import Web_Server
 import time, json, os, hmac, hashlib, secrets, glob
+import telemetry
 
 
 
 
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+# Press âŚR to execute it or replace it with your code.
+# Press Double â‡§ to search everywhere for classes, files, tool windows, actions, and settings.
 
 
 """
@@ -42,6 +43,40 @@ top_left_y = s_height - play_height - 50
 filepath = os.path.join(os.path.dirname(__file__), './highscore.txt')
 fontpath = os.path.join(os.path.dirname(__file__), 'arcade.TTF')
 fontpath_mario = os.path.join(os.path.dirname(__file__), './mario.ttf')
+PLAYER_PATH = os.path.join(os.path.dirname(__file__), "player.json")
+
+
+def load_player_data():
+    try:
+        with open(PLAYER_PATH, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+    if isinstance(data, dict):
+        return data
+    return {}
+
+
+def save_player_data(data: dict) -> None:
+    if not isinstance(data, dict):
+        return
+    try:
+        with open(PLAYER_PATH, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=True, indent=2)
+    except Exception:
+        pass
+
+
+def _get_current_user_id():
+    try:
+        user = Web_Server.get_current_user()
+    except Exception:
+        return None
+    if isinstance(user, dict):
+        return user.get("id")
+    if isinstance(user, (list, tuple)) and user:
+        return user[0]
+    return None
 
 # shapes formats
 
@@ -360,7 +395,7 @@ def draw_next_shape(piece, surface):
 
 # draws the content of the window
 def draw_window(surface, grid, score=0, last_score=0):
-    """Vykresli cele herni okno včetně score a highscore.
+    """Vykresli cele herni okno vÄŤetnÄ› score a highscore.
     Parametry:
         surface (pygame.Surface) - cilovy povrch
         grid (list) - aktualni grid
@@ -434,8 +469,12 @@ def draw_window(surface, grid, score=0, last_score=0):
 def update_score(new_score):
     """Aktualizuje soubor s highscore. Parametry:
     new_score (int) - novy score pro porovnani a zapis."""
-    score = get_max_score()
+    user_id = _get_current_user_id()
+    if user_id:
+        Web_Server.update_user_highscore(user_id, new_score)
+        return
 
+    score = get_max_score()
     with open(filepath, 'w') as file:
         if new_score > score:
             file.write(str(new_score))
@@ -448,6 +487,12 @@ def get_max_score():
     """Cte highscore ze souboru filepath.
     Navrat:
         int - hodnota highscore. (Predpoklada, ze soubor existuje a ma cislo)."""
+    user_id = _get_current_user_id()
+    if user_id:
+        try:
+            return Web_Server.get_user_highscore(user_id)
+        except Exception:
+            pass
     with open(filepath, 'r') as file:
         lines = file.readlines()        # reads all the lines and puts in a list
         score = int(lines[0].strip())   # remove \n
@@ -491,6 +536,29 @@ def main(window):
     fall_time, fall_speed, level_time = 0, 0.35, 0
     score, last_score = 0, get_max_score()
     run = True
+    exit_game = False
+    lines_cleared = 0
+    level = 1
+    level_max = 1
+    session_start = time.time()
+    session_ended = False
+
+    telemetry.send_async({"type": "game_session_start", "payload": {}})
+
+    def end_session(reason: str) -> None:
+        nonlocal session_ended
+        if session_ended:
+            return
+        session_ended = True
+        duration_s = max(0.0, time.time() - session_start)
+        payload = {
+            "duration_s": round(duration_s, 2),
+            "score": score,
+            "level_max": level_max,
+            "lines": lines_cleared,
+            "reason_end": reason,
+        }
+        telemetry.send_async({"type": "game_session_end", "payload": payload})
 
     while run:
         grid = create_grid(locked_positions)
@@ -502,6 +570,8 @@ def main(window):
             level_time = 0
             if fall_speed > 0.15:
                 fall_speed -= 0.005
+                level += 1
+                level_max = max(level_max, level)
 
         if fall_time/1000 > fall_speed:
             fall_time = 0
@@ -516,16 +586,16 @@ def main(window):
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                shutdown_auth_server()
+                end_session("quit")
+                exit_game = True
                 run = False
-                pygame.quit()
-                return
+                break
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    shutdown_auth_server()
+                    end_session("quit")
+                    exit_game = True
                     run = False
-                    pygame.quit()
-                    return
+                    break
                 if event.key == pygame.K_LEFT:
                     current_piece.x -= 1
                     if not valid_space(current_piece, grid):
@@ -543,6 +613,9 @@ def main(window):
                     if not valid_space(current_piece, grid):
                         current_piece.rotation = (current_piece.rotation - 1) % len(current_piece.shape)
 
+        if not run:
+            break
+
         for x, y in convert_shape_format(current_piece):
             if y >= 0:
                 grid[y][x] = current_piece.color
@@ -552,7 +625,9 @@ def main(window):
                 locked_positions[pos] = current_piece.color
             current_piece = next_piece
             next_piece = get_shape()
-            score += clear_rows(grid, locked_positions) * 10
+            cleared = clear_rows(grid, locked_positions)
+            lines_cleared += cleared
+            score += cleared * 10
             update_score(score)
             last_score = max(last_score, score)
 
@@ -564,10 +639,13 @@ def main(window):
             draw_text_middle('You Lost', 40, (255,255,255), window)
             pygame.display.update()
             time.sleep(2)
-            shutdown_auth_server()
+            end_session("gameover")
             run = False
 
-    pygame.quit()
+    if not session_ended:
+        end_session("unknown")
+
+    return "quit" if exit_game else "menu"
 
 
 
@@ -587,7 +665,10 @@ def main_menu(window):
                 shutdown_auth_server()
                 run = False
             elif event.type == pygame.KEYDOWN:
-                main(window)
+                result = main(window)
+                if result == "quit":
+                    shutdown_auth_server()
+                    run = False
     pygame.quit()
 
 
@@ -614,17 +695,18 @@ def get_ui_font(size):
 
 
 
-def login_gate_screen(window, port):
+def login_gate_screen(window, port, telemetry_cfg=None):
     """Zobrazi cekaeci obrazovku pred prihlasenim.
     Parametry:
         window (pygame.Surface) - cilove okno
         port (int) - port, kde bezi auth server, aby uzivatel vedel URL
+        telemetry_cfg (dict) - konfigurace telemetrie, pokud je k dispozici
     Navrat:
         bool - True pokud je uzivatel prihlasen (is_authenticated vrati True), False pri Esc nebo Exit."""
     clock = pygame.time.Clock()
     dots, tick = "", 0
 
-    # UI font – NE z arcade.ttf
+    # UI font â€“ NE z arcade.ttf
     font = get_ui_font(30)
     small = get_ui_font(24)
 
@@ -633,6 +715,20 @@ def login_gate_screen(window, port):
     btn_x = top_left_x + play_width/2 - btn_w/2
     btn_y = top_left_y + play_height - 80
     btn_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+
+    player_data = load_player_data()
+    consent = bool(player_data.get("telemetry_consent", False))
+    if telemetry_cfg is not None:
+        telemetry_cfg["enabled"] = consent
+    consent_text = "Chci posilat anonymni technicka data pro zlepseni hry."
+    consent_x = top_left_x - 160
+    consent_y = top_left_y + play_height - 150
+    consent_box = pygame.Rect(consent_x, consent_y, 22, 22)
+    consent_label = small.render(consent_text, True, (200, 200, 200))
+    consent_label_pos = (consent_x + 34, consent_y - 2)
+    consent_label_rect = consent_label.get_rect(topleft=consent_label_pos)
+    hit_width = max(consent_label_rect.width + 40, 420)
+    consent_hitbox = pygame.Rect(consent_x - 6, consent_y - 6, hit_width + 12, 34)
 
     line1 = "Please log in via your browser to start the game."
     line2 = f"If no window opened: http://127.0.0.1:{port}/login"
@@ -646,6 +742,16 @@ def login_gate_screen(window, port):
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if btn_rect.collidepoint(event.pos):
                     return False
+                if consent_hitbox.collidepoint(event.pos):
+                    previous = consent
+                    consent = not consent
+                    player_data["telemetry_consent"] = consent
+                    save_player_data(player_data)
+                    if telemetry_cfg is not None:
+                        telemetry_cfg["enabled"] = consent
+                        telemetry.init(telemetry_cfg)
+                        if consent and not previous:
+                            telemetry.send_async({"type": "app_start", "payload": {}})
 
         window.fill((0, 0, 0))
 
@@ -664,6 +770,11 @@ def login_gate_screen(window, port):
         window.blit(t2, (top_left_x - 210, top_left_y + 200))
         window.blit(t3, (top_left_x - 50, top_left_y + 260))
 
+        pygame.draw.rect(window, (200, 200, 200), consent_box, 2)
+        if consent:
+            pygame.draw.rect(window, (60, 200, 60), consent_box.inflate(-6, -6))
+        window.blit(consent_label, consent_label_pos)
+
         # Exit button
         pygame.draw.rect(window, (180, 50, 50), btn_rect, border_radius=8)
         bl = font.render("Exit (Esc)", True, (255, 255, 255))
@@ -672,5 +783,10 @@ def login_gate_screen(window, port):
 
         pygame.display.update()
 
-        if is_authenticated():
+        if Web_Server.is_authenticated():
             return True
+
+
+
+
+
