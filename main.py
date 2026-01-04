@@ -55,7 +55,7 @@ if __name__ == '__main__':
         # 3) Cekej, dokud se uzivatel neprihlasi (bez toho se hra NESPUSTI)
         if Tetris.login_gate_screen(win, port, telemetry_cfg):
             # 4) Po prihlaseni teprve dovol do hlavniho menu/hry
-            Tetris.main_menu(win)
+            Tetris.main_menu(win, telemetry_cfg)
 
         telemetry.send_async({"type": "app_exit", "payload": {}})
         telemetry.flush()

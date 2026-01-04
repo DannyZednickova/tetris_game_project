@@ -1,7 +1,7 @@
 ﻿import random
 import pygame
 import Web_Server
-import time, json, os, hmac, hashlib, secrets, glob
+import time, json, os, hmac, hashlib, secrets, glob, webbrowser
 import telemetry
 
 
@@ -45,6 +45,49 @@ fontpath = os.path.join(os.path.dirname(__file__), 'arcade.TTF')
 fontpath_mario = os.path.join(os.path.dirname(__file__), './mario.ttf')
 PLAYER_PATH = os.path.join(os.path.dirname(__file__), "player.json")
 
+# UI palette
+BG_TOP = (12, 16, 28)
+BG_BOTTOM = (6, 10, 18)
+PANEL_BG = (18, 22, 38)
+PANEL_BORDER = (70, 90, 130)
+ACCENT = (0, 200, 170)
+TEXT_PRIMARY = (245, 245, 250)
+TEXT_MUTED = (160, 170, 190)
+GRID_BG = (12, 14, 22)
+GRID_LINE = (35, 45, 70)
+
+_bg_cache = None
+_bg_size = None
+
+
+def draw_background(surface):
+    global _bg_cache, _bg_size
+    size = surface.get_size()
+    if _bg_cache is None or _bg_size != size:
+        _bg_cache = pygame.Surface(size)
+        height = max(size[1] - 1, 1)
+        for y in range(size[1]):
+            ratio = y / height
+            r = int(BG_TOP[0] + (BG_BOTTOM[0] - BG_TOP[0]) * ratio)
+            g = int(BG_TOP[1] + (BG_BOTTOM[1] - BG_TOP[1]) * ratio)
+            b = int(BG_TOP[2] + (BG_BOTTOM[2] - BG_TOP[2]) * ratio)
+            pygame.draw.line(_bg_cache, (r, g, b), (0, y), (size[0], y))
+        _bg_size = size
+    surface.blit(_bg_cache, (0, 0))
+
+
+def draw_panel(surface, rect):
+    pygame.draw.rect(surface, PANEL_BG, rect, border_radius=10)
+    pygame.draw.rect(surface, PANEL_BORDER, rect, 2, border_radius=10)
+
+
+def draw_button(surface, rect, text, font, bg, fg, border=None):
+    pygame.draw.rect(surface, bg, rect, border_radius=10)
+    if border:
+        pygame.draw.rect(surface, border, rect, 2, border_radius=10)
+    label = font.render(text, True, fg)
+    surface.blit(label, (rect.x + (rect.width - label.get_width())/2,
+                         rect.y + (rect.height - label.get_height())/2))
 
 def load_player_data():
     try:
@@ -65,18 +108,6 @@ def save_player_data(data: dict) -> None:
             json.dump(data, handle, ensure_ascii=True, indent=2)
     except Exception:
         pass
-
-
-def _get_current_user_id():
-    try:
-        user = Web_Server.get_current_user()
-    except Exception:
-        return None
-    if isinstance(user, dict):
-        return user.get("id")
-    if isinstance(user, (list, tuple)) and user:
-        return user[0]
-    return None
 
 # shapes formats
 
@@ -317,8 +348,7 @@ def draw_grid(surface):
     """Vykresli matici ciary gridu.
     Parametry:
         surface (pygame.Surface) - cilovy povrch."""
-    r = g = b = 0
-    grid_color = (r, g, b)
+    grid_color = GRID_LINE
 
     for i in range(row):
         # draw grey horizontal lines
@@ -369,60 +399,78 @@ def clear_rows(grid, locked):
 
 
 # draws the upcoming piece
-def draw_next_shape(piece, surface):
+def draw_next_shape(piece, surface, start_x=None, start_y=None, box_rect=None):
     """Vykresli nasledujici tetromino v panelu.
     Parametry:
         piece (Piece) - nasledujici polozka
         surface (pygame.Surface) - cilovy povrch"""
-    font = pygame.font.Font(fontpath, 30)
-    label = font.render('Next shape', 1, (255, 255, 255))
+    font = pygame.font.Font(fontpath, 26)
+    label = font.render('NEXT', 1, TEXT_MUTED)
 
-    start_x = top_left_x + play_width + 50
-    start_y = top_left_y + (play_height / 2 - 100)
+    if box_rect is not None:
+        surface.blit(label, (box_rect.x, box_rect.y - 28))
+    else:
+        if start_x is None:
+            start_x = top_left_x + play_width + 60
+        if start_y is None:
+            start_y = top_left_y + (play_height / 2 - 100)
+        surface.blit(label, (start_x, start_y - 32))
 
     shape_format = piece.shape[piece.rotation % len(piece.shape)]
 
+    positions = []
     for i, line in enumerate(shape_format):
         row = list(line)
         for j, column in enumerate(row):
             if column == '0':
-                pygame.draw.rect(surface, piece.color, (start_x + j*block_size, start_y + i*block_size, block_size, block_size), 0)
+                positions.append((j, i))
 
-    surface.blit(label, (start_x, start_y - 30))
+    if not positions:
+        return
+
+    min_x = min(p[0] for p in positions)
+    max_x = max(p[0] for p in positions)
+    min_y = min(p[1] for p in positions)
+    max_y = max(p[1] for p in positions)
+    shape_w = (max_x - min_x + 1) * block_size
+    shape_h = (max_y - min_y + 1) * block_size
+
+    if box_rect is not None:
+        draw_x = box_rect.x + (box_rect.width - shape_w) // 2 - min_x * block_size
+        draw_y = box_rect.y + (box_rect.height - shape_h) // 2 - min_y * block_size
+    else:
+        draw_x = start_x
+        draw_y = start_y
+
+    for x, y in positions:
+        pygame.draw.rect(surface, piece.color,
+                         (draw_x + x * block_size, draw_y + y * block_size,
+                          block_size, block_size), 0)
 
     # pygame.display.update()
 
 
 # draws the content of the window
-def draw_window(surface, grid, score=0, last_score=0):
-    """Vykresli cele herni okno vÄŤetnÄ› score a highscore.
+def draw_window(surface, grid, score=0, last_score=0, next_piece=None):
+    """Vykresli cele herni okno vcetne score a highscore.
     Parametry:
         surface (pygame.Surface) - cilovy povrch
         grid (list) - aktualni grid
         score (int) - aktualni score
-        last_score (int) - highscore"""
-    surface.fill((0, 0, 0))  # fill the surface with black
+        last_score (int) - highscore
+        next_piece (Piece) - nasledujici polozka"""
+    draw_background(surface)
 
-    pygame.font.init()  # initialise font
+    pygame.font.init()
 
-    # TITULEK
-    font = pygame.font.Font(fontpath_mario, 65)
-    font.set_bold(True)  # <-- takhle se to dela
-    label = font.render('TETRIS', 1, (255, 255, 255))
-    surface.blit(label, ((top_left_x + play_width / 2) - (label.get_width() / 2), 30))
+    title_font = pygame.font.Font(fontpath_mario, 64)
+    title_font.set_bold(True)
+    title = title_font.render('TETRIS', 1, TEXT_PRIMARY)
+    surface.blit(title, (s_width/2 - title.get_width()/2, 24))
 
-    # SCORE
-    font = pygame.font.Font(fontpath, 30)
-    label = font.render('SCORE   ' + str(score), 1, (255, 255, 255))
-    start_x = top_left_x + play_width + 50
-    start_y = top_left_y + (play_height / 2 - 100)
-    surface.blit(label, (start_x, start_y + 200))
-
-    # HIGHSCORE
-    label_hi = font.render('HIGHSCORE   ' + str(last_score), 1, (255, 255, 255))
-    start_x_hi = top_left_x - 240
-    start_y_hi = top_left_y + 200
-    surface.blit(label_hi, (start_x_hi + 20, start_y_hi + 200))
+    play_outer = pygame.Rect(top_left_x - 12, top_left_y - 12, play_width + 24, play_height + 24)
+    draw_panel(surface, play_outer)
+    pygame.draw.rect(surface, GRID_BG, (top_left_x, top_left_y, play_width, play_height))
 
     # GRID
     for i in range(row):
@@ -431,21 +479,45 @@ def draw_window(surface, grid, score=0, last_score=0):
                              (top_left_x + j * block_size,
                               top_left_y + i * block_size,
                               block_size, block_size), 0)
-
     draw_grid(surface)
 
-    # BORDER
-    border_color = (255, 255, 255)
-    pygame.draw.rect(surface, border_color,
-                     (top_left_x, top_left_y, play_width, play_height), 4)
+    # SCORE PANEL
+    panel_w = 200
+    right_x = top_left_x + play_width + 20
+    score_panel = pygame.Rect(right_x, top_left_y + 20, panel_w, 300)
+    draw_panel(surface, score_panel)
+    score_font = pygame.font.Font(fontpath, 26)
+    label_score = score_font.render('SCORE', 1, TEXT_MUTED)
+    value_score = score_font.render(str(score), 1, TEXT_PRIMARY)
+    surface.blit(label_score, (score_panel.x + 18, score_panel.y + 18))
+    surface.blit(value_score, (score_panel.x + 18, score_panel.y + 52))
 
+    # NEXT
+    if next_piece is not None:
+        next_box = pygame.Rect(score_panel.x + 14, score_panel.y + 110,
+                               score_panel.width - 28, 160)
+        draw_panel(surface, next_box)
+        draw_next_shape(next_piece, surface, box_rect=next_box)
 
+    # HIGHSCORE PANEL
+    left_x = top_left_x - panel_w - 20
+    left_panel = pygame.Rect(left_x, top_left_y + 170, panel_w, 180)
+    draw_panel(surface, left_panel)
+    label_hi = score_font.render('HIGHSCORE', 1, TEXT_MUTED)
+    value_hi = score_font.render(str(last_score), 1, TEXT_PRIMARY)
+    surface.blit(label_hi, (left_panel.x + 18, left_panel.y + 18))
+    surface.blit(value_hi, (left_panel.x + 18, left_panel.y + 52))
 
-
-
-
-
-
+    user_text = "User: -"
+    try:
+        user = Web_Server.get_current_user()
+        if isinstance(user, dict) and user.get("username"):
+            user_text = f"User: {user['username']}"
+    except Exception:
+        pass
+    user_font = get_ui_font(20)
+    user_label = user_font.render(user_text, 1, TEXT_MUTED)
+    surface.blit(user_label, (left_panel.x + 18, left_panel.y + 96))
 
 #tady to updatuje Score....
 
@@ -469,11 +541,6 @@ def draw_window(surface, grid, score=0, last_score=0):
 def update_score(new_score):
     """Aktualizuje soubor s highscore. Parametry:
     new_score (int) - novy score pro porovnani a zapis."""
-    user_id = _get_current_user_id()
-    if user_id:
-        Web_Server.update_user_highscore(user_id, new_score)
-        return
-
     score = get_max_score()
     with open(filepath, 'w') as file:
         if new_score > score:
@@ -487,17 +554,12 @@ def get_max_score():
     """Cte highscore ze souboru filepath.
     Navrat:
         int - hodnota highscore. (Predpoklada, ze soubor existuje a ma cislo)."""
-    user_id = _get_current_user_id()
-    if user_id:
-        try:
-            return Web_Server.get_user_highscore(user_id)
-        except Exception:
-            pass
-    with open(filepath, 'r') as file:
-        lines = file.readlines()        # reads all the lines and puts in a list
-        score = int(lines[0].strip())   # remove \n
-
-    return score
+    try:
+        with open(filepath, 'r') as file:
+            lines = file.readlines()        # reads all the lines and puts in a list
+            return int(lines[0].strip())    # remove \n
+    except Exception:
+        return 0
 
 
 
@@ -535,8 +597,6 @@ def main(window):
     clock = pygame.time.Clock()
     fall_time, fall_speed, level_time = 0, 0.35, 0
     score, last_score = 0, get_max_score()
-    run = True
-    exit_game = False
     lines_cleared = 0
     level = 1
     level_max = 1
@@ -550,6 +610,7 @@ def main(window):
         if session_ended:
             return
         session_ended = True
+        update_score(score)
         duration_s = max(0.0, time.time() - session_start)
         payload = {
             "duration_s": round(duration_s, 2),
@@ -560,7 +621,7 @@ def main(window):
         }
         telemetry.send_async({"type": "game_session_end", "payload": payload})
 
-    while run:
+    while True:
         grid = create_grid(locked_positions)
         fall_time += clock.get_rawtime()
         level_time += clock.get_rawtime()
@@ -587,15 +648,11 @@ def main(window):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 end_session("quit")
-                exit_game = True
-                run = False
-                break
+                return "quit"
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     end_session("quit")
-                    exit_game = True
-                    run = False
-                    break
+                    return "quit"
                 if event.key == pygame.K_LEFT:
                     current_piece.x -= 1
                     if not valid_space(current_piece, grid):
@@ -613,9 +670,6 @@ def main(window):
                     if not valid_space(current_piece, grid):
                         current_piece.rotation = (current_piece.rotation - 1) % len(current_piece.shape)
 
-        if not run:
-            break
-
         for x, y in convert_shape_format(current_piece):
             if y >= 0:
                 grid[y][x] = current_piece.color
@@ -628,50 +682,158 @@ def main(window):
             cleared = clear_rows(grid, locked_positions)
             lines_cleared += cleared
             score += cleared * 10
-            update_score(score)
-            last_score = max(last_score, score)
+            if score > last_score:
+                last_score = score
 
-        draw_window(window, grid, score, last_score)
-        draw_next_shape(next_piece, window)
+        draw_window(window, grid, score, last_score, next_piece)
         pygame.display.update()
 
         if check_lost(locked_positions):
-            draw_text_middle('You Lost', 40, (255,255,255), window)
-            pygame.display.update()
-            time.sleep(2)
             end_session("gameover")
-            run = False
+            result = game_over_screen(window, score, last_score)
+            return result
 
     if not session_ended:
         end_session("unknown")
 
-    return "quit" if exit_game else "menu"
+    return "menu"
+
+
+def game_over_screen(window, score, highscore):
+    clock = pygame.time.Clock()
+    title_font = pygame.font.Font(fontpath_mario, 52)
+    body_font = get_ui_font(26)
+    small_font = get_ui_font(20)
+
+    panel_w, panel_h = 440, 260
+    panel_x = s_width/2 - panel_w/2
+    panel_y = s_height/2 - panel_h/2
+    panel = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+    retry_rect = pygame.Rect(panel_x + 24, panel_y + 170, 180, 52)
+    menu_rect = pygame.Rect(panel_x + 236, panel_y + 170, 180, 52)
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                    return "retry"
+                if event.key == pygame.K_ESCAPE:
+                    return "menu"
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if retry_rect.collidepoint(event.pos):
+                    return "retry"
+                if menu_rect.collidepoint(event.pos):
+                    return "menu"
+
+        draw_background(window)
+        draw_panel(window, panel)
+
+        title = title_font.render("GAME OVER", True, TEXT_PRIMARY)
+        window.blit(title, (panel_x + panel_w/2 - title.get_width()/2, panel_y + 24))
+
+        score_label = body_font.render(f"Score: {score}", True, TEXT_MUTED)
+        hi_label = body_font.render(f"Highscore: {highscore}", True, TEXT_MUTED)
+        window.blit(score_label, (panel_x + 36, panel_y + 90))
+        window.blit(hi_label, (panel_x + 36, panel_y + 120))
+
+        draw_button(window, retry_rect, "Play Again", body_font, ACCENT, (5, 12, 18))
+        draw_button(window, menu_rect, "Back to Menu", body_font, (80, 90, 120), TEXT_PRIMARY)
+
+        hint = small_font.render("Enter = Play Again, Esc = Menu", True, TEXT_MUTED)
+        window.blit(hint, (panel_x + panel_w/2 - hint.get_width()/2, panel_y + panel_h - 32))
+
+        pygame.display.update()
+        clock.tick(30)
 
 
 
 
 
 
-def main_menu(window):
+def main_menu(window, telemetry_cfg=None):
     """Zobrazi hlavni menu a ceka na stisk klavesy pro start hry.
     Parametry:
         window (pygame.Surface) - cilove okno."""
     run = True
+
+    player_data = load_player_data()
+    consent = bool(player_data.get("telemetry_consent", False))
+    if telemetry_cfg is not None:
+        telemetry_cfg["enabled"] = consent
+
+    def run_game_loop():
+        result = main(window)
+        while result == "retry":
+            result = main(window)
+        return result
+
+    def set_consent(value: bool):
+        nonlocal consent
+        previous = consent
+        consent = bool(value)
+        player_data["telemetry_consent"] = consent
+        save_player_data(player_data)
+        if telemetry_cfg is not None:
+            telemetry_cfg["enabled"] = consent
+            telemetry.init(telemetry_cfg)
+            if consent and not previous:
+                telemetry.send_async({"type": "app_start", "payload": {}})
+
     while run:
-        draw_text_middle('Press any key to begin', 50, (255,255,255), window)
+        draw_background(window)
+
+        title_font = pygame.font.Font(fontpath_mario, 70)
+        title_font.set_bold(True)
+        title = title_font.render("TETRIS", True, TEXT_PRIMARY)
+        window.blit(title, (s_width/2 - title.get_width()/2, 120))
+
+        question = get_ui_font(28).render("Start game?", True, TEXT_PRIMARY)
+        window.blit(question, (s_width/2 - question.get_width()/2, 230))
+
+        hint = get_ui_font(22).render("Press Enter to play, Esc to exit", True, TEXT_MUTED)
+        window.blit(hint, (s_width/2 - hint.get_width()/2, 280))
+
+        consent_text = get_ui_font(22).render("Uchovavat anonymni technicka data?", True, TEXT_PRIMARY)
+        window.blit(consent_text, (s_width/2 - consent_text.get_width()/2, 330))
+        yes_rect = pygame.Rect(s_width/2 - 130, 370, 100, 38)
+        no_rect = pygame.Rect(s_width/2 + 30, 370, 100, 38)
+        yes_color = ACCENT if consent else (80, 90, 120)
+        no_color = (80, 90, 120) if consent else ACCENT
+        draw_button(window, yes_rect, "Ano", get_ui_font(20), yes_color, (5, 12, 18))
+        draw_button(window, no_rect, "Ne", get_ui_font(20), no_color, (5, 12, 18))
+
         pygame.display.update()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 shutdown_auth_server()
                 run = False
             elif event.type == pygame.KEYDOWN:
-                result = main(window)
+                if event.key == pygame.K_ESCAPE:
+                    shutdown_auth_server()
+                    run = False
+                elif event.key == pygame.K_y:
+                    set_consent(True)
+                elif event.key == pygame.K_n:
+                    set_consent(False)
+                else:
+                    result = run_game_loop()
+                    if result == "quit":
+                        shutdown_auth_server()
+                        run = False
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if yes_rect.collidepoint(event.pos):
+                    set_consent(True)
+                    continue
+                if no_rect.collidepoint(event.pos):
+                    set_consent(False)
+                    continue
+                result = run_game_loop()
                 if result == "quit":
                     shutdown_auth_server()
                     run = False
     pygame.quit()
-
-
 
 
 def get_ui_font(size):
@@ -710,81 +872,111 @@ def login_gate_screen(window, port, telemetry_cfg=None):
     font = get_ui_font(30)
     small = get_ui_font(24)
 
+    panel = pygame.Rect(60, 90, s_width - 120, 480)
+
     # Exit button rect
     btn_w, btn_h = 170, 46
-    btn_x = top_left_x + play_width/2 - btn_w/2
-    btn_y = top_left_y + play_height - 80
+    btn_x = panel.x + panel.width - btn_w - 24
+    btn_y = panel.y + panel.height - btn_h - 20
     btn_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+
+    open_rect = pygame.Rect(panel.x + 30, panel.y + 320, 260, 52)
 
     player_data = load_player_data()
     consent = bool(player_data.get("telemetry_consent", False))
     if telemetry_cfg is not None:
         telemetry_cfg["enabled"] = consent
-    consent_text = "Chci posilat anonymni technicka data pro zlepseni hry."
-    consent_x = top_left_x - 160
-    consent_y = top_left_y + play_height - 150
-    consent_box = pygame.Rect(consent_x, consent_y, 22, 22)
-    consent_label = small.render(consent_text, True, (200, 200, 200))
-    consent_label_pos = (consent_x + 34, consent_y - 2)
-    consent_label_rect = consent_label.get_rect(topleft=consent_label_pos)
-    hit_width = max(consent_label_rect.width + 40, 420)
-    consent_hitbox = pygame.Rect(consent_x - 6, consent_y - 6, hit_width + 12, 34)
+    consent_text_1 = "Chcete uchovavat anonymni technicka data"
+    consent_text_2 = "pro zlepseni hry?"
+    consent_x = panel.x + 30
+    consent_y = panel.y + 220
+    consent_label_1 = small.render(consent_text_1, True, TEXT_PRIMARY)
+    consent_label_2 = small.render(consent_text_2, True, TEXT_PRIMARY)
+    consent_label_pos_1 = (consent_x + 34, consent_y)
+    consent_label_pos_2 = (consent_x + 34, consent_y + 26)
+    consent_hitbox = pygame.Rect(panel.x + 16, consent_y - 6, panel.width - 32, 60)
+    yes_rect = pygame.Rect(panel.x + 30, consent_y + 58, 110, 40)
+    no_rect = pygame.Rect(panel.x + 150, consent_y + 58, 110, 40)
 
     line1 = "Please log in via your browser to start the game."
     line2 = f"If no window opened: http://127.0.0.1:{port}/login"
 
     while True:
+        def set_consent(value: bool):
+            nonlocal consent
+            value = bool(value)
+            if consent == value:
+                return
+            previous = consent
+            consent = value
+            player_data["telemetry_consent"] = consent
+            save_player_data(player_data)
+            if telemetry_cfg is not None:
+                telemetry_cfg["enabled"] = consent
+                telemetry.init(telemetry_cfg)
+                if consent and not previous:
+                    telemetry.send_async({"type": "app_start", "payload": {}})
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                return False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return False
+                if event.key == pygame.K_y:
+                    set_consent(True)
+                if event.key == pygame.K_n:
+                    set_consent(False)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if btn_rect.collidepoint(event.pos):
                     return False
-                if consent_hitbox.collidepoint(event.pos):
-                    previous = consent
-                    consent = not consent
-                    player_data["telemetry_consent"] = consent
-                    save_player_data(player_data)
-                    if telemetry_cfg is not None:
-                        telemetry_cfg["enabled"] = consent
-                        telemetry.init(telemetry_cfg)
-                        if consent and not previous:
-                            telemetry.send_async({"type": "app_start", "payload": {}})
+                if open_rect.collidepoint(event.pos):
+                    webbrowser.open(f"http://127.0.0.1:{port}/login", new=1, autoraise=True)
+                if yes_rect.collidepoint(event.pos):
+                    set_consent(True)
+                if no_rect.collidepoint(event.pos):
+                    set_consent(False)
 
-        window.fill((0, 0, 0))
+        draw_background(window)
+        draw_panel(window, panel)
 
         # texts
-        t1 = font.render(line1, True, (255, 255, 255))
-        t2 = small.render(line2, True, (200, 200, 200))
+        t1 = font.render(line1, True, TEXT_PRIMARY)
+        t2 = small.render(line2, True, TEXT_MUTED)
 
         tick += clock.tick(30)
         if tick > 300:
             dots = "." * ((len(dots) % 3) + 1)
             tick = 0
-        t3 = font.render("Waiting for login" + dots, True, (255, 255, 0))
+        t3 = font.render("Waiting for login" + dots, True, ACCENT)
 
         # draw
-        window.blit(t1, (top_left_x - 160, top_left_y + 150))
-        window.blit(t2, (top_left_x - 210, top_left_y + 200))
-        window.blit(t3, (top_left_x - 50, top_left_y + 260))
+        window.blit(t1, (panel.x + 30, panel.y + 40))
+        window.blit(t2, (panel.x + 30, panel.y + 90))
+        window.blit(t3, (panel.x + 30, panel.y + 150))
 
-        pygame.draw.rect(window, (200, 200, 200), consent_box, 2)
-        if consent:
-            pygame.draw.rect(window, (60, 200, 60), consent_box.inflate(-6, -6))
-        window.blit(consent_label, consent_label_pos)
+        pygame.draw.rect(window, PANEL_BG, consent_hitbox, border_radius=8)
+        pygame.draw.rect(window, PANEL_BORDER, consent_hitbox, 1, border_radius=8)
+        window.blit(consent_label_1, consent_label_pos_1)
+        window.blit(consent_label_2, consent_label_pos_2)
+
+        yes_color = ACCENT if consent else (80, 90, 120)
+        no_color = (80, 90, 120) if consent else ACCENT
+        draw_button(window, yes_rect, "Ano", small, yes_color, (5, 12, 18))
+        draw_button(window, no_rect, "Ne", small, no_color, (5, 12, 18))
+
+        draw_button(window, open_rect, "Open Login Page", small, ACCENT, (5, 12, 18))
 
         # Exit button
-        pygame.draw.rect(window, (180, 50, 50), btn_rect, border_radius=8)
-        bl = font.render("Exit (Esc)", True, (255, 255, 255))
-        window.blit(bl, (btn_x + (btn_w - bl.get_width())/2,
-                         btn_y + (btn_h - bl.get_height())/2))
+        draw_button(window, btn_rect, "Exit (Esc)", font, (180, 50, 50), TEXT_PRIMARY)
 
         pygame.display.update()
 
         if Web_Server.is_authenticated():
             return True
+
+
+
 
 
 
