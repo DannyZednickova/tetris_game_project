@@ -506,6 +506,10 @@ def draw_window(surface, grid, score=0, last_score=0, next_piece=None):
     surface.blit(label_score, (score_panel.x + 18, score_panel.y + 18))
     surface.blit(value_score, (score_panel.x + 18, score_panel.y + 52))
 
+    # >>> NOVÉ: tlačítko Konec (vpravo nahoře u panelu)
+    quit_rect = pygame.Rect(score_panel.x, score_panel.y + score_panel.height + 14, panel_w, 46)
+    draw_button(surface, quit_rect, "Konec (Esc)", get_ui_font(22), (180, 50, 50), TEXT_PRIMARY)
+
     # NEXT
     if next_piece is not None:
         next_box = pygame.Rect(score_panel.x + 14, score_panel.y + 110,
@@ -517,7 +521,7 @@ def draw_window(surface, grid, score=0, last_score=0, next_piece=None):
     left_x = top_left_x - panel_w - 20
     left_panel = pygame.Rect(left_x, top_left_y + 170, panel_w, 180)
     draw_panel(surface, left_panel)
-    label_hi = score_font.render('HIGHSCORE', 1, TEXT_MUTED)
+    label_hi = score_font.render('NEJVYŠŠÍ SKÓRE', 1, TEXT_MUTED)
     value_hi = score_font.render(str(last_score), 1, TEXT_PRIMARY)
     surface.blit(label_hi, (left_panel.x + 18, left_panel.y + 18))
     surface.blit(value_hi, (left_panel.x + 18, left_panel.y + 52))
@@ -532,23 +536,13 @@ def draw_window(surface, grid, score=0, last_score=0, next_piece=None):
     user_font = get_ui_font(20)
     user_label = user_font.render(user_text, 1, TEXT_MUTED)
     surface.blit(user_label, (left_panel.x + 18, left_panel.y + 96))
+    return quit_rect
 
 #tady to updatuje Score....
 
 # Tady je zatim hloupy ukladac vysokeho skoree do txt - potreba udelat tak, at se uklada aktualni ID
 #uzivatele + datum + nejvyssi skore + ja nwm co dalsiho
 #po kazde hre se udela zapis do DB??? nebo budem updatovat dle ID a pricitat skore??
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -561,6 +555,11 @@ def update_score(new_score):
             file.write(str(new_score))
         else:
             file.write(str(score))
+
+def save_last_score(score: int):
+    data = load_player_data()
+    data["last_score"] = int(score)
+    save_player_data(data)
 
 
 # V GUI je to videt jako high score....
@@ -616,6 +615,7 @@ def main(window):
     level_max = 1
     session_start = time.time()
     session_ended = False
+    quit_rect = None
 
     telemetry.send_async({"type": "game_session_start", "payload": {}})
 
@@ -625,6 +625,9 @@ def main(window):
             return
         session_ended = True
         update_score(score)
+        duration_s = max(0.0, time.time() - session_start)
+        # IMPORTANT: refresh highscore z disku (nebo max)
+        last_score = max(get_max_score(), score)
         duration_s = max(0.0, time.time() - session_start)
         payload = {
             "duration_s": round(duration_s, 2),
@@ -660,6 +663,14 @@ def main(window):
             change_piece = False
 
         for event in pygame.event.get():
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if quit_rect and quit_rect.collidepoint(event.pos):
+                    end_session("quit_button")
+                    result = game_over_screen(window, score, last_score)
+                    return result
+
+
             if event.type == pygame.QUIT:
                 end_session("quit")
                 return "quit"
@@ -699,7 +710,7 @@ def main(window):
             if score > last_score:
                 last_score = score
 
-        draw_window(window, grid, score, last_score, next_piece)
+        quit_rect = draw_window(window, grid, score, last_score, next_piece)
         pygame.display.update()
 
         if check_lost(locked_positions):
@@ -741,21 +752,22 @@ def game_over_screen(window, score, highscore):
                 if menu_rect.collidepoint(event.pos):
                     return "menu"
 
+
         draw_background(window)
         draw_panel(window, panel)
 
-        title = title_font.render("GAME OVER", True, TEXT_PRIMARY)
+        title = title_font.render("KONEC HRY", True, TEXT_PRIMARY)
         window.blit(title, (panel_x + panel_w/2 - title.get_width()/2, panel_y + 24))
 
-        score_label = body_font.render(f"Score: {score}", True, TEXT_MUTED)
-        hi_label = body_font.render(f"Highscore: {highscore}", True, TEXT_MUTED)
+        score_label = body_font.render(f"Skóre: {score}", True, TEXT_MUTED)
+        hi_label = body_font.render(f"Celkové Skóre: {highscore}", True, TEXT_MUTED)
         window.blit(score_label, (panel_x + 36, panel_y + 90))
         window.blit(hi_label, (panel_x + 36, panel_y + 120))
 
-        draw_button(window, retry_rect, "Play Again", body_font, ACCENT, (5, 12, 18))
-        draw_button(window, menu_rect, "Back to Menu", body_font, (80, 90, 120), TEXT_PRIMARY)
+        draw_button(window, retry_rect, "Hrát Znovu", body_font, ACCENT, (5, 12, 18))
+        draw_button(window, menu_rect, "Zpět do menu", body_font, (80, 90, 120), TEXT_PRIMARY)
 
-        hint = small_font.render("Enter = Play Again, Esc = Menu", True, TEXT_MUTED)
+        hint = small_font.render("Enter = Hrát Znovu, Esc = Zpět do Menu", True, TEXT_MUTED)
         window.blit(hint, (panel_x + panel_w/2 - hint.get_width()/2, panel_y + panel_h - 32))
 
         pygame.display.update()
@@ -803,13 +815,13 @@ def main_menu(window, telemetry_cfg=None):
         title = title_font.render("TETRIS", True, TEXT_PRIMARY)
         window.blit(title, (s_width/2 - title.get_width()/2, 120))
 
-        question = get_ui_font(28).render("Start game?", True, TEXT_PRIMARY)
+        question = get_ui_font(28).render("Začít hru?", True, TEXT_PRIMARY)
         window.blit(question, (s_width/2 - question.get_width()/2, 230))
 
-        hint = get_ui_font(22).render("Press Enter to play, Esc to exit", True, TEXT_MUTED)
+        hint = get_ui_font(22).render("Stishni ENT pro začátek hry, nebo ESC pro konec", True, TEXT_MUTED)
         window.blit(hint, (s_width/2 - hint.get_width()/2, 280))
 
-        consent_text = get_ui_font(22).render("Uchovavat anonymni technicka data?", True, TEXT_PRIMARY)
+        consent_text = get_ui_font(22).render("Uchovávat anonymní technická data?", True, TEXT_PRIMARY)
         window.blit(consent_text, (s_width/2 - consent_text.get_width()/2, 330))
         yes_rect = pygame.Rect(s_width/2 - 130, 370, 100, 38)
         no_rect = pygame.Rect(s_width/2 + 30, 370, 100, 38)
