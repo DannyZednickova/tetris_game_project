@@ -6,11 +6,6 @@ import telemetry
 
 
 
-
-# Press âŚR to execute it or replace it with your code.
-# Press Double â‡§ to search everywhere for classes, files, tool windows, actions, and settings.
-
-
 """
 10 x 20 grid
 play_height = 2 * play_width
@@ -26,6 +21,8 @@ tetriminos:
 """
 
 pygame.font.init()
+_cursor_is_hand = None
+
 
 # global variables
 
@@ -58,6 +55,23 @@ GRID_LINE = (35, 45, 70)
 
 _bg_cache = None
 _bg_size = None
+
+
+def update_hover_cursor(is_hovering: bool):
+    """Změní kurzor na ručičku, když je myš nad klikacím prvkem."""
+    global _cursor_is_hand
+    if _cursor_is_hand == is_hovering:
+        return
+    _cursor_is_hand = is_hovering
+    try:
+        pygame.mouse.set_cursor(
+            pygame.cursors.Cursor(
+                pygame.SYSTEM_CURSOR_HAND if is_hovering else pygame.SYSTEM_CURSOR_ARROW
+            )
+        )
+    except Exception:
+        # když by to na nějakém systému nešlo, aspoň to nespadne
+        pass
 
 
 def draw_background(surface):
@@ -852,83 +866,101 @@ def get_ui_font(size):
 
 
 
-
-
-
-
-
 def login_gate_screen(window, port, telemetry_cfg=None):
-    """Zobrazi cekaeci obrazovku pred prihlasenim.
-    Parametry:
-        window (pygame.Surface) - cilove okno
-        port (int) - port, kde bezi auth server, aby uzivatel vedel URL
-        telemetry_cfg (dict) - konfigurace telemetrie, pokud je k dispozici
-    Navrat:
-        bool - True pokud je uzivatel prihlasen (is_authenticated vrati True), False pri Esc nebo Exit."""
+    """
+    Čekací obrazovka před přihlášením.
+    - CZ texty
+    - rozumné mezery / padding
+    - ručička kurzoru nad tlačítky (update_hover_cursor)
+    """
     clock = pygame.time.Clock()
     dots, tick = "", 0
 
-    # UI font â€“ NE z arcade.ttf
     font = get_ui_font(30)
-    small = get_ui_font(24)
+    small = get_ui_font(22)
+    tiny = get_ui_font(18)
 
+    # Panel + padding
     panel = pygame.Rect(60, 90, s_width - 120, 480)
+    pad = 30
 
-    # Exit button rect
-    btn_w, btn_h = 170, 46
-    btn_x = panel.x + panel.width - btn_w - 24
-    btn_y = panel.y + panel.height - btn_h - 20
-    btn_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
-
-    open_rect = pygame.Rect(panel.x + 30, panel.y + 320, 260, 52)
-
+    # Player/telemetry consent
     player_data = load_player_data()
     consent = bool(player_data.get("telemetry_consent", False))
     if telemetry_cfg is not None:
         telemetry_cfg["enabled"] = consent
-    consent_text_1 = "Chcete uchovavat anonymni technicka data"
-    consent_text_2 = "pro zlepseni hry?"
-    consent_x = panel.x + 30
-    consent_y = panel.y + 220
-    consent_label_1 = small.render(consent_text_1, True, TEXT_PRIMARY)
-    consent_label_2 = small.render(consent_text_2, True, TEXT_PRIMARY)
-    consent_label_pos_1 = (consent_x + 34, consent_y)
-    consent_label_pos_2 = (consent_x + 34, consent_y + 26)
-    consent_hitbox = pygame.Rect(panel.x + 16, consent_y - 6, panel.width - 32, 60)
-    yes_rect = pygame.Rect(panel.x + 30, consent_y + 58, 110, 40)
-    no_rect = pygame.Rect(panel.x + 150, consent_y + 58, 110, 40)
 
-    line1 = "Please log in via your browser to start the game."
-    line2 = f"If no window opened: http://127.0.0.1:{port}/login"
+    def set_consent(value: bool):
+        nonlocal consent
+        value = bool(value)
+        if consent == value:
+            return
+        previous = consent
+        consent = value
+        player_data["telemetry_consent"] = consent
+        save_player_data(player_data)
+        if telemetry_cfg is not None:
+            telemetry_cfg["enabled"] = consent
+            telemetry.init(telemetry_cfg)
+            if consent and not previous:
+                telemetry.send_async({"type": "app_start", "payload": {}})
+
+    # --- TEXTY (CZ) ---
+    line1 = "Pro spuštění hry se přihlas v prohlížeči."
+    line2 = f"Když se okno neotevřelo: http://127.0.0.1:{port}/login"
+
+    # --- UI RECTS (layout) ---
+    # Exit vpravo dole
+    btn_w, btn_h = 180, 46
+    btn_rect = pygame.Rect(
+        panel.right - pad - btn_w,
+        panel.bottom - pad - btn_h,
+        btn_w, btn_h
+    )
+
+    # Consent box (větší, aby se text nemačkal)
+    consent_box = pygame.Rect(
+        panel.x + pad,
+        panel.y + 210,
+        panel.width - pad * 2,
+        86
+    )
+
+    # Ano/Ne pod consent boxem
+    gap = 12
+    yes_rect = pygame.Rect(consent_box.x, consent_box.bottom + 12, 110, 40)
+    no_rect = pygame.Rect(yes_rect.right + gap, consent_box.bottom + 12, 110, 40)
+
+    # Tlačítko otevřít login stránku – pod Ano/Ne, širší
+    open_rect = pygame.Rect(consent_box.x, no_rect.bottom + 14, 280, 52)
+
+    # --- helper pro víc řádků textu (bez ořezávání) ---
+    def blit_multiline(surface, lines, x, y, font_obj, color, line_gap=6):
+        yy = y
+        for ln in lines:
+            img = font_obj.render(ln, True, color)
+            surface.blit(img, (x, yy))
+            yy += img.get_height() + line_gap
 
     while True:
-        def set_consent(value: bool):
-            nonlocal consent
-            value = bool(value)
-            if consent == value:
-                return
-            previous = consent
-            consent = value
-            player_data["telemetry_consent"] = consent
-            save_player_data(player_data)
-            if telemetry_cfg is not None:
-                telemetry_cfg["enabled"] = consent
-                telemetry.init(telemetry_cfg)
-                if consent and not previous:
-                    telemetry.send_async({"type": "app_start", "payload": {}})
-
+        # --- EVENTS ---
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                update_hover_cursor(False)
                 return False
+
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    update_hover_cursor(False)
                     return False
                 if event.key == pygame.K_y:
                     set_consent(True)
                 if event.key == pygame.K_n:
                     set_consent(False)
+
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if btn_rect.collidepoint(event.pos):
+                    update_hover_cursor(False)
                     return False
                 if open_rect.collidepoint(event.pos):
                     webbrowser.open(f"http://127.0.0.1:{port}/login", new=1, autoraise=True)
@@ -937,48 +969,69 @@ def login_gate_screen(window, port, telemetry_cfg=None):
                 if no_rect.collidepoint(event.pos):
                     set_consent(False)
 
+        # --- HOVER CURSOR (ručička nad tlačítky) ---
+        mx, my = pygame.mouse.get_pos()
+        hovering = (
+            btn_rect.collidepoint(mx, my)
+            or open_rect.collidepoint(mx, my)
+            or yes_rect.collidepoint(mx, my)
+            or no_rect.collidepoint(mx, my)
+        )
+        update_hover_cursor(hovering)
+
+        # --- DRAW ---
         draw_background(window)
         draw_panel(window, panel)
 
-        # texts
+        # Top texty
         t1 = font.render(line1, True, TEXT_PRIMARY)
-        t2 = small.render(line2, True, TEXT_MUTED)
+        t2 = tiny.render(line2, True, TEXT_MUTED)
 
         tick += clock.tick(30)
         if tick > 300:
             dots = "." * ((len(dots) % 3) + 1)
             tick = 0
-        t3 = font.render("Waiting for login" + dots, True, ACCENT)
+        t3 = font.render("Čekám na přihlášení" + dots, True, ACCENT)
 
-        # draw
-        window.blit(t1, (panel.x + 30, panel.y + 40))
-        window.blit(t2, (panel.x + 30, panel.y + 90))
-        window.blit(t3, (panel.x + 30, panel.y + 150))
+        window.blit(t1, (panel.x + pad, panel.y + 45))
+        window.blit(t2, (panel.x + pad, panel.y + 95))
+        window.blit(t3, (panel.x + pad, panel.y + 145))
 
-        pygame.draw.rect(window, PANEL_BG, consent_hitbox, border_radius=8)
-        pygame.draw.rect(window, PANEL_BORDER, consent_hitbox, 1, border_radius=8)
-        window.blit(consent_label_1, consent_label_pos_1)
-        window.blit(consent_label_2, consent_label_pos_2)
+        # Consent box
+        pygame.draw.rect(window, PANEL_BG, consent_box, border_radius=10)
+        pygame.draw.rect(window, PANEL_BORDER, consent_box, 1, border_radius=10)
 
+        consent_lines = [
+            "Ukládat anonymní technická data",
+            "pro zlepšení hry?"
+        ]
+        blit_multiline(
+            window,
+            consent_lines,
+            consent_box.x + 18,
+            consent_box.y + 14,
+            small,
+            TEXT_PRIMARY,
+            line_gap=4
+        )
+
+        # Ano/Ne
         yes_color = ACCENT if consent else (80, 90, 120)
         no_color = (80, 90, 120) if consent else ACCENT
         draw_button(window, yes_rect, "Ano", small, yes_color, (5, 12, 18))
         draw_button(window, no_rect, "Ne", small, no_color, (5, 12, 18))
 
-        draw_button(window, open_rect, "Open Login Page", small, ACCENT, (5, 12, 18))
+        # Open login page (CZ)
+        draw_button(window, open_rect, "Otevřít přihlášení", small, ACCENT, (5, 12, 18))
 
-        # Exit button
-        draw_button(window, btn_rect, "Exit (Esc)", font, (180, 50, 50), TEXT_PRIMARY)
+        # Exit (CZ)
+        draw_button(window, btn_rect, "Konec (Esc)", font, (180, 50, 50), TEXT_PRIMARY)
 
         pygame.display.update()
 
         if Web_Server.is_authenticated():
+            update_hover_cursor(False)
             return True
-
-
-
-
-
 
 
 

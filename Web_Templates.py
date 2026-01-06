@@ -71,13 +71,13 @@ FORM_LOGIN = """<!doctype html><meta charset="utf-8"><title>Přihlášení</titl
 
 OK_PAGE = """<!doctype html><meta charset="utf-8"><title>OK</title>$style
 <div class="card">
-<h2>Přihlášení proběhlo úspěšně 🎮</h2>
+<h2>Přihlášení proběhlo úspěšně</h2>
 <p>Okno můžeš zavřít a vrátit se do hry.</p>
 </div>"""
 
 ERR_PAGE = """<!doctype html><meta charset="utf-8"><title>Chyba</title>$style
 <div class="card">
-<h2>Neplatné přihlašovací údaje ❌</h2>
+<h2>Neplatné přihlašovací údaje</h2>
 <p><a href="/login">Zkusit znovu</a></p>
 </div>"""
 
@@ -95,13 +95,13 @@ PROFILE_PAGE = """<!doctype html><meta charset="utf-8"><title>Profil hráče</ti
 
 PLAY_PAGE = """<!doctype html><meta charset="utf-8"><title>Přihlášení dokončeno</title>$style
 <div class="card">
-    <h2>✅ Přihlášení dokončeno</h2>
+    <h2>Přihlášení dokončeno</h2>
     <p>Můžeš se vrátit do hry.</p>
 </div>"""
 
 
 USER_EXISTS_PAGE = """<!doctype html><meta charset="utf-8"><title>Uživatel už existuje</title>$style
 <div class="card">
-    <h2>⚠️ Uživatel už existuje</h2>
+    <h2> Uživatel už existuje</h2>
     <p><a href="/login">Přihlásit</a></p>
 </div>"""
