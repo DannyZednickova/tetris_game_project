@@ -33,15 +33,29 @@ button:hover { background: linear-gradient(90deg, #0096c7, #00b4d8); transform: 
 a { color: #90e0ef; text-decoration: none; }
 a:hover { text-decoration: underline; }
 p { margin-top: 15px; text-align: center; }
+
+.error{
+  background: rgba(255,0,0,.10);
+  border: 1px solid rgba(255,0,0,.35);
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: 12px auto;
+  max-width: 420px;
+}
+
 </style>
 """
 
 # Používáme $style, $username, ... (Template), a NE .format() / f-strings
 FORM_SETUP = """<!doctype html><meta charset="utf-8"><title>Vytvořit prvního uživatele</title>$style
 <h2>První nastavení účtu</h2>
+
+$error_html
+
 <form method="post" class="card">
-<label>Uživatelské jméno:<br><input name="u" required></label><br><br>
-<label>Heslo:<br><input name="p" type="password" required></label><br><br>
+<label>Nové jméno uživatele:<br><input name="u" required></label><br><br>
+<label>Nové heslo:<br><input name="p" type="password" required></label><br><br>
+<label>Ověření nového hesla:<br><input name="p" type="password" required></label><br><br>
 <button type="submit">Vytvořit účet</button>
 </form>
 <p>Po vytvoření budete přesměrováni na přihlášení.</p>"""

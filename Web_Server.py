@@ -2,6 +2,7 @@ import os, sqlite3, secrets, hashlib, hmac, threading, webbrowser, re
 from flask import Flask, request, redirect, make_response
 from string import Template
 from Web_Templates import STYLE, FORM_LOGIN, FORM_SETUP, OK_PAGE, ERR_PAGE, PROFILE_PAGE, PLAY_PAGE, USER_EXISTS_PAGE
+from html import escape
 
 """
 AUTORIZACE UZIVATELE
@@ -123,35 +124,47 @@ def valid_password(p):
 
 
 
+
+def errbox(msg: str) -> str:
+    if not msg:
+        return ""
+    return f'<div class="error">{escape(msg)}</div>'
+
+
+
+
+
+
+
 # --- ROUTES ---
 
 @app.get("/setup")
 def setup_get():
     """GET /setup - Zobrazi HTML formular pro registraci uzivatele. Bez parametru, vraci HTML stranku."""
-    return render(FORM_SETUP, style=STYLE)
+    return render(FORM_SETUP,  style=STYLE, error_html="", u="")
 
 @app.post("/setup")
 def setup_post():
-    """POST /setup - Zpracuje registraci uzivatele.
-    Ocekava form data: 'u' (username), 'p' (password).
-    Validuje vstupy, vytvori hash a salt a ulozi do DB.
-    Vraci: pri uspechu redirect na /login, jinak znovu zobrazi formular nebo chybu."""
     conn = _db()
-    u = request.form.get("u", "").strip()
-    p = request.form.get("p", "")
+    u = (request.form.get("u") or "").strip()
+    p = request.form.get("p") or ""
+
     if not u or not p:
         conn.close()
-        return render(FORM_SETUP, style=STYLE)
+        return render(FORM_SETUP, style=STYLE, error_html=errbox("Vyplň uživatelské jméno i heslo."), u=u)
 
     if not valid_username(u):
         conn.close()
-        return render(FORM_SETUP, style=STYLE)
+        return render(FORM_SETUP, style=STYLE, error_html=errbox("Neplatné uživatelské jméno."), u=u)
 
     if not valid_password(p):
         conn.close()
         return render(
             FORM_SETUP,
-            style=STYLE)
+            style=STYLE,
+            error_html=errbox("Slabé heslo: musí mít alespoň 8 znaků, číslo a velké písmeno."),
+            u=u
+        )
 
     pwd_hash, salt = hash_password(p)
     try:
@@ -162,12 +175,11 @@ def setup_post():
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
+        return render(FORM_SETUP, style=STYLE, error_html=errbox("Uživatel už existuje."), u=u)
+    finally:
+        conn.close()
 
-        return render(USER_EXISTS_PAGE, style=STYLE)
-
-    conn.close()
     return redirect("/login")
-
 @app.get("/login")
 def login_get():
     """GET /login - Zobrazi prihlasovaci formular. Pokud v DB nejsou zadni uzivatele, presmeruje na /setup."""
