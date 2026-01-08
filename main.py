@@ -1,5 +1,10 @@
 ﻿import json
 import os
+import subprocess
+import sys
+import time
+from urllib.parse import urlparse
+from urllib.request import urlopen
 
 import Tetris
 import Web_Server
@@ -37,11 +42,89 @@ def _build_telemetry_cfg(player_data: dict, manifest: dict) -> dict:
     }
 
 
+def _is_local_endpoint(endpoint_url: str) -> bool:
+    if not endpoint_url:
+        return False
+    parsed = urlparse(endpoint_url)
+    host = (parsed.hostname or "").lower()
+    return host in {"127.0.0.1", "localhost"}
+
+
+def _health_url(endpoint_url: str) -> str:
+    parsed = urlparse(endpoint_url)
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}/health"
+
+
+def _check_health(endpoint_url: str, timeout_s: float = 0.4) -> bool:
+    health = _health_url(endpoint_url)
+    if not health:
+        return False
+    try:
+        with urlopen(health, timeout=timeout_s) as resp:
+            return 200 <= resp.status < 300
+    except Exception:
+        return False
+
+
+def _start_local_telemetry_server(endpoint_url: str):
+    if not _is_local_endpoint(endpoint_url):
+        return None
+    parsed = urlparse(endpoint_url)
+    port = parsed.port
+    if port is None:
+        return None
+    if _check_health(endpoint_url):
+        return None
+    server_path = os.path.join(os.path.dirname(__file__), "telemetry_server.py")
+    if not os.path.isfile(server_path):
+        return None
+    env = os.environ.copy()
+    env["TELEMETRY_SERVER_HOST"] = parsed.hostname or "127.0.0.1"
+    env["TELEMETRY_SERVER_PORT"] = str(port)
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = subprocess.CREATE_NO_WINDOW
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, server_path],
+            cwd=os.path.dirname(__file__),
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creationflags,
+        )
+    except Exception:
+        return None
+    for _ in range(10):
+        if _check_health(endpoint_url, timeout_s=0.6):
+            break
+        time.sleep(0.3)
+    return proc
+
+
+def _stop_local_telemetry_server(proc) -> None:
+    if not proc:
+        return
+    try:
+        if proc.poll() is None:
+            proc.terminate()
+            proc.wait(timeout=2)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
 if __name__ == '__main__':
+    server_proc = None
     try:
         player_data = _load_json(PLAYER_PATH)
         manifest = _load_json(MANIFEST_PATH)
         telemetry_cfg = _build_telemetry_cfg(player_data, manifest)
+        server_proc = _start_local_telemetry_server(telemetry_cfg.get("endpoint_url", ""))
         telemetry.init(telemetry_cfg)
         telemetry.send_async({"type": "app_start", "payload": {}})
 
@@ -63,5 +146,7 @@ if __name__ == '__main__':
         telemetry.capture_exception("main", e)
         telemetry.flush()
         raise
+    finally:
+        _stop_local_telemetry_server(server_proc)
 
 #test test je test. uzivatel...
