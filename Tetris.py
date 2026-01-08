@@ -896,27 +896,6 @@ def login_gate_screen(window, port, telemetry_cfg=None):
     panel = pygame.Rect(60, 90, s_width - 120, 480)
     pad = 30
 
-    # Player/telemetry consent
-    player_data = load_player_data()
-    consent = bool(player_data.get("telemetry_consent", False))
-    if telemetry_cfg is not None:
-        telemetry_cfg["enabled"] = consent
-
-    def set_consent(value: bool):
-        nonlocal consent
-        value = bool(value)
-        if consent == value:
-            return
-        previous = consent
-        consent = value
-        player_data["telemetry_consent"] = consent
-        save_player_data(player_data)
-        if telemetry_cfg is not None:
-            telemetry_cfg["enabled"] = consent
-            telemetry.init(telemetry_cfg)
-            if consent and not previous:
-                telemetry.send_async({"type": "app_start", "payload": {}})
-
     # --- TEXTY (CZ) ---
     line1 = "Pro spuštění hry se přihlas v prohlížeči."
     line2 = f"Když se okno neotevřelo: http://127.0.0.1:{port}/login"
@@ -930,29 +909,8 @@ def login_gate_screen(window, port, telemetry_cfg=None):
         btn_w, btn_h
     )
 
-    # Consent box (větší, aby se text nemačkal)
-    consent_box = pygame.Rect(
-        panel.x + pad,
-        panel.y + 210,
-        panel.width - pad * 2,
-        86
-    )
-
-    # Ano/Ne pod consent boxem
-    gap = 12
-    yes_rect = pygame.Rect(consent_box.x, consent_box.bottom + 12, 110, 40)
-    no_rect = pygame.Rect(yes_rect.right + gap, consent_box.bottom + 12, 110, 40)
-
-    # Tlačítko otevřít login stránku – pod Ano/Ne, širší
-    open_rect = pygame.Rect(consent_box.x, no_rect.bottom + 14, 280, 52)
-
-    # --- helper pro víc řádků textu (bez ořezávání) ---
-    def blit_multiline(surface, lines, x, y, font_obj, color, line_gap=6):
-        yy = y
-        for ln in lines:
-            img = font_obj.render(ln, True, color)
-            surface.blit(img, (x, yy))
-            yy += img.get_height() + line_gap
+    # Tlačítko otevřít login stránku
+    open_rect = pygame.Rect(panel.x + pad, panel.y + 210, 280, 52)
 
     while True:
         # --- EVENTS ---
@@ -965,10 +923,6 @@ def login_gate_screen(window, port, telemetry_cfg=None):
                 if event.key == pygame.K_ESCAPE:
                     update_hover_cursor(False)
                     return False
-                if event.key == pygame.K_y:
-                    set_consent(True)
-                if event.key == pygame.K_n:
-                    set_consent(False)
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if btn_rect.collidepoint(event.pos):
@@ -976,18 +930,12 @@ def login_gate_screen(window, port, telemetry_cfg=None):
                     return False
                 if open_rect.collidepoint(event.pos):
                     webbrowser.open(f"http://127.0.0.1:{port}/login", new=1, autoraise=True)
-                if yes_rect.collidepoint(event.pos):
-                    set_consent(True)
-                if no_rect.collidepoint(event.pos):
-                    set_consent(False)
 
         # --- HOVER CURSOR (ručička nad tlačítky) ---
         mx, my = pygame.mouse.get_pos()
         hovering = (
             btn_rect.collidepoint(mx, my)
             or open_rect.collidepoint(mx, my)
-            or yes_rect.collidepoint(mx, my)
-            or no_rect.collidepoint(mx, my)
         )
         update_hover_cursor(hovering)
 
@@ -1008,30 +956,6 @@ def login_gate_screen(window, port, telemetry_cfg=None):
         window.blit(t1, (panel.x + pad, panel.y + 45))
         window.blit(t2, (panel.x + pad, panel.y + 95))
         window.blit(t3, (panel.x + pad, panel.y + 145))
-
-        # Consent box
-        pygame.draw.rect(window, PANEL_BG, consent_box, border_radius=10)
-        pygame.draw.rect(window, PANEL_BORDER, consent_box, 1, border_radius=10)
-
-        consent_lines = [
-            "Ukládat anonymní technická data",
-            "pro zlepšení hry?"
-        ]
-        blit_multiline(
-            window,
-            consent_lines,
-            consent_box.x + 18,
-            consent_box.y + 14,
-            small,
-            TEXT_PRIMARY,
-            line_gap=4
-        )
-
-        # Ano/Ne
-        yes_color = ACCENT if consent else (80, 90, 120)
-        no_color = (80, 90, 120) if consent else ACCENT
-        draw_button(window, yes_rect, "Ano", small, yes_color, (5, 12, 18))
-        draw_button(window, no_rect, "Ne", small, no_color, (5, 12, 18))
 
         # Open login page (CZ)
         draw_button(window, open_rect, "Otevřít přihlášení", small, ACCENT, (5, 12, 18))
