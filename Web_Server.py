@@ -108,9 +108,9 @@ def valid_username(u):
 
 
 def valid_password(p):
-    """Zkontroluje heslo podle pravidel: delka 4-15, alespon jedno male, jedno velike pismeno, cislo a specialni znak.
+    """Zkontroluje heslo podle pravidel: delka 8, alespon jedno male, jedno velike pismeno, cislo a specialni znak.
     Parametry: p (str). Vraci bool."""
-    if not 4 <= len(p) <= 15:
+    if len(p) < 8:
         return False
     if not re.search(r"[a-z]", p):  # alespon jedno male pismeno
         return False
@@ -162,7 +162,7 @@ def setup_post():
         return render(
             FORM_SETUP,
             style=STYLE,
-            error_html=errbox("Slabé heslo: musí mít alespoň 8 znaků, číslo a velké písmeno."),
+            error_html=errbox("Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak."),
             u=u
         )
 
