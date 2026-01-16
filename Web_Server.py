@@ -40,10 +40,18 @@ def _db():
 
 
 def _ensure_user_columns(conn: sqlite3.Connection) -> None:
+    # highscore
     try:
         conn.execute("ALTER TABLE users ADD COLUMN highscore INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass
+
+    # date_of_birth
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN date_of_birth TEXT DEFAULT 'neuvedeno'")
+    except sqlite3.OperationalError:
+        pass
+
     conn.commit()
 
 

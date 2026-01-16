@@ -1,4 +1,4 @@
-﻿import random
+import random
 import pygame
 import Web_Server
 import time, json, os, hmac, hashlib, secrets, glob, webbrowser

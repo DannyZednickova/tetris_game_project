@@ -1,4 +1,4 @@
-﻿Sebastian Reed, Jakub Dole‘–al, Daniela ZednÆðŽ›kovÆó - projekt Tetris - UTB 2025
+Sebastian Reed, Jakub Dole‘–al, Daniela ZednÆðŽ›kovÆó - projekt Tetris - UTB 2025
 
 Danny:
 navrh
