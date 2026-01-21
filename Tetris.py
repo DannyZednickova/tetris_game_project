@@ -546,15 +546,47 @@ def draw_window(surface, grid, score=0, last_score=0, next_piece=None):
 
 
 
+def _current_user_id():
+    try:
+        user = Web_Server.get_current_user()
+    except Exception:
+        return None
+    if not isinstance(user, dict):
+        return None
+    user_id = user.get("id")
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    return user_id if user_id > 0 else None
+
+
+def _read_file_highscore():
+    try:
+        with open(filepath, 'r') as file:
+            lines = file.readlines()
+            return int(lines[0].strip())
+    except Exception:
+        return 0
+
+
+def _write_file_highscore(score):
+    try:
+        with open(filepath, 'w') as file:
+            file.write(str(int(score)))
+    except Exception:
+        pass
+
+
 def update_score(new_score):
-    """Aktualizuje soubor s highscore. Parametry:
-    new_score (int) - novy score pro porovnani a zapis."""
-    score = get_max_score()
-    with open(filepath, 'w') as file:
-        if new_score > score:
-            file.write(str(new_score))
-        else:
-            file.write(str(score))
+    """Aktualizuje highscore pro prave prihlaseneho uzivatele.
+    Parametry: new_score (int) - novy score pro porovnani a zapis."""
+    user_id = _current_user_id()
+    if user_id:
+        Web_Server.update_user_highscore(user_id, int(new_score))
+        return
+    current = _read_file_highscore()
+    _write_file_highscore(max(int(new_score), current))
 
 def save_last_score(score: int):
     data = load_player_data()
@@ -564,15 +596,11 @@ def save_last_score(score: int):
 
 # V GUI je to videt jako high score....
 def get_max_score():
-    """Cte highscore ze souboru filepath.
-    Navrat:
-        int - hodnota highscore. (Predpoklada, ze soubor existuje a ma cislo)."""
-    try:
-        with open(filepath, 'r') as file:
-            lines = file.readlines()        # reads all the lines and puts in a list
-            return int(lines[0].strip())    # remove \n
-    except Exception:
-        return 0
+    """Vrati highscore pro aktualniho uzivatele, pripadne z lokalniho souboru."""
+    user_id = _current_user_id()
+    if user_id:
+        return Web_Server.get_user_highscore(user_id)
+    return _read_file_highscore()
 
 
 
