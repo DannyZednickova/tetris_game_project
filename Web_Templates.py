@@ -13,6 +13,15 @@ body {
     height: 100vh;
     margin: 0;
 }
+.ok{
+  background: rgba(0,255,0,.10);
+  border: 1px solid rgba(0,255,0,.25);
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: 12px auto;
+  max-width: 420px;
+}
+
 h2 { color: #ffffff; text-align: center; font-size: 2em; margin-bottom: 20px; }
 form, .card {
     background-color: #1b263b; padding: 30px 40px; border-radius: 15px;
@@ -62,6 +71,9 @@ $error_html
 
 FORM_LOGIN = """<!doctype html><meta charset="utf-8"><title>Přihlášení</title>$style
 <h2>Přihlášení</h2>
+
+$msg_html
+
 <form method="post" class="card">
 <label>Uživatelské jméno:<br><input name="u" required></label><br><br>
 <label>Heslo:<br><input name="p" type="password" required></label><br><br>

@@ -15,7 +15,7 @@ def render(tpl, **kwargs):
     # doplní $style a další $placeholdery bezpečně (CSS závorky nevadí)
     return Template(tpl).substitute(**kwargs)
 
-DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "tetris_users"))
+DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "tetris_users.db"))
 AUTH_EVENT = threading.Event()
 AUTH_TOKEN = None
 CURRENT_USER = None
@@ -107,20 +107,8 @@ def valid_username(u):
     return 4 <= len(u) <= 32 and re.match(r'^[A-Za-z0-9](?:[A-Za-z0-9._-]{1,31})$', u)
 
 
-def valid_password(p):
-    """Zkontroluje heslo podle pravidel: delka 4-15, alespon jedno male, jedno velike pismeno, cislo a specialni znak.
-    Parametry: p (str). Vraci bool."""
-    if not 4 <= len(p) <= 15:
-        return False
-    if not re.search(r"[a-z]", p):  # alespon jedno male pismeno
-        return False
-    if not re.search(r"[A-Z]", p):  # alespon jedno velke pismeno
-        return False
-    if not re.search(r"[0-9]", p):  # alespon jedno cislo
-        return False
-    if not re.search(r"[^A-Za-z0-9]", p):  # alespon jeden specialni znak
-        return False
-    return True
+def valid_password(p: str) -> bool:
+    return bool(re.fullmatch(r"[a-z0-9]{6,}", p))
 
 
 
@@ -149,6 +137,11 @@ def setup_post():
     u = (request.form.get("u") or "").strip()
     p = request.form.get("p") or ""
 
+    # DEBUG: ověř, kam fakt zapisuješ
+    before = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    print("DB_PATH =", DB_PATH)
+    print("users before =", before)
+
     if not u or not p:
         conn.close()
         return render(FORM_SETUP, style=STYLE, error_html=errbox("Vyplň uživatelské jméno i heslo."), u=u)
@@ -162,33 +155,41 @@ def setup_post():
         return render(
             FORM_SETUP,
             style=STYLE,
-            error_html=errbox("Slabé heslo: musí mít alespoň 8 znaků, číslo a velké písmeno."),
+            error_html=errbox("Heslo musí mít alespoň 6 znaků a smí obsahovat jen malá písmena a čísla."),
             u=u
         )
 
     pwd_hash, salt = hash_password(p)
+
     try:
         conn.execute(
             "INSERT INTO users(username, pwd_hash, salt) VALUES(?,?,?)",
-            (u, pwd_hash, salt)
+            (u, sqlite3.Binary(pwd_hash), sqlite3.Binary(salt))
         )
         conn.commit()
-    except sqlite3.IntegrityError:
+    except Exception as e:
+        # DEBUG: vrať konkrétní chybu do UI, jinak to vypadá jako „nic se nestalo“
         conn.close()
-        return render(FORM_SETUP, style=STYLE, error_html=errbox("Uživatel už existuje."), u=u)
+        return render(FORM_SETUP, style=STYLE, error_html=errbox(f"DB chyba: {e}"), u=u)
     finally:
+        after = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        print("users after =", after)
         conn.close()
 
-    return redirect("/login")
+    return redirect("/login?created=1")
+
 @app.get("/login")
 def login_get():
-    """GET /login - Zobrazi prihlasovaci formular. Pokud v DB nejsou zadni uzivatele, presmeruje na /setup."""
     conn = _db()
     cnt = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     conn.close()
     if cnt == 0:
         return redirect("/setup")
-    return render(FORM_LOGIN, style=STYLE)
+
+    created = request.args.get("created") == "1"
+    msg_html = '<div class="ok">Uživatel byl vytvořen. Teď se přihlas.</div>' if created else ""
+
+    return render(FORM_LOGIN, style=STYLE, msg_html=msg_html)
 
 @app.post("/login")
 def login_post():

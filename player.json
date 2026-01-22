@@ -4,6 +4,6 @@
   "nickname": "JDede",
   "age": "",
   "country": "",
-  "telemetry_consent": false,
+  "telemetry_consent": true,
   "last_score": 0
 }
