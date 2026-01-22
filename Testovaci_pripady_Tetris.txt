@@ -1,0 +1,166 @@
+TS-01 Spuštění aplikace (EXE) ​
+
+Kroky: Myší levým tlačítkem dvojklik na Tetris.exe​
+očekávaný výsledek:​
+Otevře se terminal a okno Tetris (Login Required) s tlačítky a ve webovém prohlížeči se otevře http://127.0.0.1:8765/setup.​
+Reálný výsledek:
+Otevře se okno Tetris (Login Required) s tlačítky a ve webovém prohlížeči se otevře http://127.0.0.1:8765/setup.​
+Status: PASS
+​
+TS-02 Tlačítko Otevřít přihlášení v okně Tetris (Login Required)​
+Kroky:Myší levým tlačítkem klik na tlačítko otevřít přihlášení 
+očekávaný výsledek:​
+Otevře se ve webovém prohlížeči http://127.0.0.1:8765/setup První nastavení účtu.​
+Realný výsledek:
+Otevře se ve webovém prohlížeči http://127.0.0.1:8765/setup První nastavení účtu.​
+Status:PASS
+
+TS-03 Tlačítko Konec v okně Tetris (Login Required)
+Kroky: Myší levým tlačítkem klik na tlačítko Konec(Esc)
+Očekávaný výsledek:
+Zavře se spuštěná aplikace Tetris (Login Required) a terminál
+Reálný výsledek:
+Zavře se spuštěná aplikace Tetris (Login Required) a terminál
+Status: PASS
+
+TS-04 Tlačítko Vytvořit účet bez vyplněných údajů
+Kroky: Myší levým tlačítkem klik na tlačítko Vytvořit účet.
+Očekávaný výsledek:
+Vyskočí informativní hláška "Vyplňte prosím toto pole. S bílým vykřičníkem v oranžovém čtverci.
+Reálný výsledek:
+Vyskočí informativní hláška "Vyplňte prosím toto pole. S bílým vykřičníkem v oranžovém čtverci.
+Status: PASS
+
+TS-05 Tlačítko Vytvořit účet s chybným heslem málo znaků
+Kroky: 	Nové jméno uživatele: Pepa
+	Nové heslo: 123
+	Ověření nového hesla: 123
+	Myší levým tlačítkem klik na tlačítko Vytvořit účet
+Očekávaný výsledek:
+Vyskočí error hláška v červené obdelníku s nápisem: Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak.
+Reálný výsledek:
+Vyskočí error hláška v červené obdelníku s nápisem: Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak.
+Status: PASS
+
+TS-06 Tlačítko Vytvořit účet s korektními údaji
+Kroky: Nové jméno uživatele: Pepa
+       Nové heslo: TajneHeslo123456789@
+       Ověření nového hesla: TajneHeslo123456789@
+       Levým tlačítkem myši klik na tlačítko Vytvořit účet
+Očekávaný výsledek
+Změna obrazovky na Přihlášení
+Reálný výsledek:
+Změna obrazovky na Přihlášení:
+STATUS:PASS
+
+TS-07 Tlačítko "Login" pro Přihlášení
+Kroky: Uživatelské jméno: Pepa
+       Heslo: TajneHeslo123456789@
+       levým tlačítkem myši klik na tlačítko Login
+Očekávaný výsledek:
+Zobrazení Profil hráče, Uživatel, Datum narození, Highscore a tlačítko Chci hrát
+Reálný výsledek:
+Zobrazení Profil hráče, Uživatel, Datum narození, Highscore a tlačítko Chci hrát
+STATUS: PASS
+
+TS-08 Tlačítko Chci hrát v Profil hráče
+Kroky: Klik levým tlačítkem myši na tlačítko Chci hrát:
+Očekávaný výsledek: Na obrazovce na webu se objeví přihlášení dokončeno, Mužeš se vrátit do hry.
+		    V aplikaci změna na z: Pro spuštění hry se přihlas v prohlížeči
+		    V aplikaci se objeví tetris, začít hru: Stiskni ENT pro začátek hry, nebo ESC pro konec
+		    Uchovávat anonymní technická data?
+		    tlačítka Ano / Ne
+Reálný výsledek: Na obrazovce na webu se objeví přihlášení dokončeno, Mužeš se vrátit do hry.
+		    V aplikaci změna na z: Pro spuštění hry se přihlas v prohlížeči
+		    V aplikaci se objeví tetris, začít hru: Stiskni ENT pro začátek hry, nebo ESC pro konec
+		    Uchovávat anonymní technická data?
+		    tlačítka Ano / Ne
+STATUS: PASS
+Ts-09 Klávesa ENT v aplikaci Tetris
+Kroky: zmáčknutí ENTER na klávesnici
+Očekávaný výsledek: Spustí se hra tetris
+reálný výsledek: Spustí se hra tetris
+STATUS: PASS
+
+TS-10 ESC pro konec
+Kroky: zmáčknutí ESCAPE klávesy na klávesnici
+Očekávaný výsledek: ukončí se hra
+Reálný výsledek: ukončí se hra
+Status: PASS
+
+TS-11 ESC během hry
+Kroky: zmáčknutí ESC klávesy na klávesnici během hry
+Očekávaný výsledek: 
+Reálný výsledek:
+STATUS: PASS
+
+TS-12 Kliknutí na tlačítko Konec (Esc) během hry
+Kroky: Kliknutí levým tlačítkem myši na tlačítko Konec (Esc) během hry
+Očekávaný výsledek: Vypíše se Konec hry a objeví se tlačítka Hrát znovu a zpět do menu
+Reálný výsledek: Vypíše se Konec hry a objeví se tlačítka Hrát znovu a zpět do menu
+STATUS: PASS
+
+TS-13 Zmáčknutí klávesy (Esc) během hry 
+Kroky: Zmáčknutí klávesy (Esc) během hry
+Očekávaný výsledek: Vypíše se Konec hry a objeví se tlačítka Hrát znovu a zpět do menu
+Reálný výsledek: Vypne se celá aplikace Tetris
+STATUS: DENIED
+
+TS-14 Tlačítko Hrát Znovu
+Kroky: Levým tlačítkem myši klikneme na tlačítko Hrát Znovu
+Očekávaný výsledek: Spustí se hra a běhají kostičky
+Reálný výsledek: Spustí se hra a běhají kostičky
+STATUS: PASS
+
+TS-15 Tlačítko Vytvořit účet s chybným heslem bez malého a Velkého písmena a speciálního znaku
+Kroky: 	Nové jméno uživatele: Pepa
+	Nové heslo: 123456789
+	Ověření nového hesla: 123456789
+	Myší levým tlačítkem klik na tlačítko Vytvořit účet
+Očekávaný výsledek:
+Vyskočí error hláška v červené obdelníku s nápisem: Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak.
+Reálný výsledek:
+Vyskočí error hláška v červené obdelníku s nápisem: Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak.
+Status: PASS
+
+TS-16 Tlačítko Vytvořit účet s chybným heslem bez malého a Velkého písmena
+Kroky: 	Nové jméno uživatele: Pepa
+	Nové heslo: 123456789@
+	Ověření nového hesla: 123456789@
+	Myší levým tlačítkem klik na tlačítko Vytvořit účet
+Očekávaný výsledek:
+Vyskočí error hláška v červené obdelníku s nápisem: Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak.
+Reálný výsledek:
+Vyskočí error hláška v červené obdelníku s nápisem: Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak.
+Status: PASS
+
+TS-17 Tlačítko Vytvořit účet s chybným heslem bez velkého písmena
+Kroky: 	Nové jméno uživatele: Pepa
+	Nové heslo: 123456789@a
+	Ověření nového hesla: 123456789@a
+	Myší levým tlačítkem klik na tlačítko Vytvořit účet
+Očekávaný výsledek:
+Vyskočí error hláška v červené obdelníku s nápisem: Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak.
+Reálný výsledek:
+Vyskočí error hláška v červené obdelníku s nápisem: Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak.
+Status: PASS
+
+TS-18 Tlačítko Vytvořit účet s chybným heslem čísla
+Kroky: 	Nové jméno uživatele: Pepa
+	Nové heslo: aaaaaaaaaaaaaBBB@a
+	Ověření nového hesla: aaaaaaaaaaaaaBBB@a
+	Myší levým tlačítkem klik na tlačítko Vytvořit účet
+Očekávaný výsledek:
+Vyskočí error hláška v červené obdelníku s nápisem: Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak.
+Reálný výsledek:
+Vyskočí error hláška v červené obdelníku s nápisem: Slabé heslo: musí mít alespoň 8 znaků, malé i velké písmeno, číslo a speciální znak.
+Status: PASS
+
+TS-19 Proklik skrze text Vytvoř první účet
+Kroky: Levým tlačítkem myši klikneme na zbarvený text "Vytvoř první účet" na obrazovce Přihlášení 
+Očekávaný výsledek: Otevře se obrazovka První nastavení účtu s možností vyplnění dat
+Reálný výsledek: Otevře se obrazovka První nastavení účtu s možností vyplnění dat
+Status: PASS
+
+
+
